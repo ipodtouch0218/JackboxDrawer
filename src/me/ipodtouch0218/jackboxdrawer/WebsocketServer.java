@@ -47,8 +47,7 @@ public class WebsocketServer extends WebSocketServer {
 
 	@Override
 	public void onOpen(WebSocket socket, ClientHandshake handshake) {
-		// TODO Auto-generated method stub
-		
+		broadcast("version:" + JackboxDrawer.VERSION.replace(".", ""));
 	}
 
 	@Override

@@ -1,8 +1,9 @@
 // ==UserScript==
-// @name       JackboxDrawer
-// @namespace  ipodtouch0218
-// @version    1.0.0
-// @include    *://jackbox.tv/*
+// @name         JackboxDrawer
+// @description  Allows custom brush sizes, colors, and even importing images into Jackbox's drawing games!
+// @namespace    ipodtouch0218/JackboxDrawer
+// @version      1.0.1
+// @include      *://jackbox.tv/*
 // ==/UserScript==
 
 //Catch outgoing messages and replace drawing data.
@@ -14,7 +15,7 @@ window.eval(`
 oldConsoleLog = console.log;
 console.log = function(...args) {
   oldConsoleLog(args.join(' ')); //Send data to the existing console.log. We don't wanna lose out on any debug info.
-  if (typeof(tempvar) == 'undefined' || tempvar == null) {
+  if (typeof(tempvar) == 'undefined' || tempvar === null) {
     //No custom code ready, most likely a vanilla subimssion. Ignore this one.
     return;
   }
@@ -30,7 +31,7 @@ console.log = function(...args) {
 `);
 
 //Handle games and their differences.
-const games = {
+var games = {
   "drawful_1": {
     submitDrawing: function() {
       document.getElementById("drawful-submitdrawing").click();
@@ -80,7 +81,7 @@ const games = {
       document.getElementById("submitdrawing").click();
     },
     isInDrawingMode: function() {
-      return document.getElementsByClassName("Draw")[0] == null;
+      return document.getElementsByClassName("Draw")[0] === null;
     },
     getSketchpad: function() {
       return document.getElementById("fullLayer");
@@ -103,15 +104,15 @@ var gameID = null;
 
 function updateGame(id) {
   gameID = id;
-  if (typeof(socket) != 'undefined' && socket != null) {
+  if (typeof(socket) !== 'undefined' && socket !== null) {
     //Update the drawing app on what game we're playing.
     socket.send("updategame:" + id); 
   }
 }
 
 //Is ran every time the document changes. Useful for finding which game we're currently playing.
-const callback = function(mutationsList, observer) {
-  if (document.getElementById("page-drawful") != null) {
+var callback = function(mutationsList, observer) {
+  if (document.getElementById("page-drawful") !== null) {
     //Drawful 1 and 2 actually share the same ID, but have different graphcis modes.
     //Luckily, the drawing div has "drawful2-page" as a class in Drawful 2.
     if (document.getElementsByClassName("state-draw")[0].getAttribute("class").includes("drawful2-page")) {
@@ -119,23 +120,23 @@ const callback = function(mutationsList, observer) {
     } else {
       updateGame("drawful_1");
     }
-  } else if (document.getElementById("page-auction") != null) {
+  } else if (document.getElementById("page-auction") !== null) {
     updateGame("bidiots");
-  } else if (document.getElementById("page-awshirt") != null) {
+  } else if (document.getElementById("page-awshirt") !== null) {
     //Fun fact. Tee KO is actually internally called "awshirt" both on the website and in the game files.
     updateGame("tee_ko");
   } else if (document.getElementsByClassName("Push The Button")[0] != null) {
     //Yes, the class name has spaces.
     updateGame("push_the_button");
-  } else if (document.getElementById("page-triviadeath") != null) {
+  } else if (document.getElementById("page-triviadeath") !== null) {
     updateGame("trivia_murder_party_1");
   }
 };
 
 //Initiate the DOM observer to run "callback" every time it changes.
-const observer = new MutationObserver(callback);
-const targetNode = document.getElementById('content-region');
-const config = { attributes: false, childList: true, subtree: true };
+var observer = new MutationObserver(callback);
+var targetNode = document.getElementById('content-region');
+var config = { attributes: false, childList: true, subtree: true };
 observer.observe(targetNode, config);
 
 //Info related to communicating with the Java app.
@@ -146,7 +147,7 @@ var firsttry = false;
 //We want to automatically attempt reconnects if the connection is dropped, use setInterval with some
 //checks to make sure we don't make multiple connections.
 setInterval(function() {
-  if (open || socket != null) {
+  if (open || socket !== null) {
     return;
   }
   socket = new WebSocket("ws://127.0.0.1:2460");
@@ -158,6 +159,18 @@ setInterval(function() {
   };
   
   socket.onmessage = function(event) {
+    
+    //Check for the proper version.
+    if (event.data.startsWith("version")) {
+        var version = event.data.split(":")[1];
+        if (version > 101) {
+            alert("Please update the JackboxDrawer Greasemonkey script!");
+        } else if (version < 101) {
+            alert("Please update the JackboxDrawer Java program!\nThe download can be found here: https://github.com/ipodtouch0218/JackboxDrawer/releases");
+        }
+        return;
+    }
+    
     //Save incoming code from the websocket in "tempvar". Needs to be eval'd to get through Greasemonkey's sandboxing.
     //We could also use window.wrappedJSObject but this is what I thought of first. Either way, potental security breach right here.
     window.eval("var tempvar = `" + event.data + "`");
@@ -165,8 +178,8 @@ setInterval(function() {
     //Check to make sure we can actually DRAW right now.
     //If not, even attempting to submit a drawing can easily crash our webpage.
     
-    let currentGame = games[gameID];
-    if (typeof (currentGame) === 'undefined' || currentGame == null) {
+    var currentGame = games[gameID];
+    if (typeof (currentGame) === 'undefined' || currentGame === null) {
     	alert("Game not supported!");
       return;
     }
@@ -179,16 +192,16 @@ setInterval(function() {
     }
     
     //Find the current sketchpad. We need it for later...
-    let sketchpad = currentGame.getSketchpad();
-    if (sketchpad == null) {
+    var sketchpad = currentGame.getSketchpad();
+    if (sketchpad === null) {
       //Couldn't find it, we're probably can't draw right now. Somehow, the previous checks failed.
       return;
     }
     
     //Simulate drawing on the sketchpad with mouse events. We can't access the sketchpad's info directly
     //as it's kept track of internally, and the game never attempts to send any data if it's blank.
-    let rect = sketchpad.getBoundingClientRect();
-    let mouseEvent = document.createEvent('MouseEvents');
+    var rect = sketchpad.getBoundingClientRect();
+    var mouseEvent = document.createEvent('MouseEvents');
     
     mouseEvent.clientX = rect.x + rect.width / 2;
     mouseEvent.clientY = rect.y + rect.height / 2;

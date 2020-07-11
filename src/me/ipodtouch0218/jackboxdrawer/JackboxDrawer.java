@@ -58,7 +58,9 @@ import javax.swing.JButton;
 
 public class JackboxDrawer {
 
-	private static List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
+	public static final String VERSION = "1.0.1";
+	
+	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
 	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300, VECTOR_IMPORT_SCALE_FACTOR = 5;
 	private final BufferedImage transparentTexture = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	{
@@ -101,7 +103,7 @@ public class JackboxDrawer {
 	 */
 	private void initialize() {
 		window = new JFrame();
-		window.setTitle("Jackbox Drawer v1.0.1");
+		window.setTitle("Jackbox Drawer v" + VERSION);
 		window.setBounds(100, 100, 1018, 612);
 		window.setMinimumSize(new Dimension(736, 612));
 		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
