@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>JackboxDrawer</groupId>
 	<artifactId>JackboxDrawer</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.0.0</version>
 
 	<dependencies>
 		<!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-core -->
@@ -22,17 +22,14 @@
 		</dependency>
 		<!-- https://mvnrepository.com/artifact/org.java-websocket/Java-WebSocket -->
 		<dependency>
-		    <groupId>org.java-websocket</groupId>
-		    <artifactId>Java-WebSocket</artifactId>
-		    <version>1.5.1</version>
+			<groupId>org.java-websocket</groupId>
+			<artifactId>Java-WebSocket</artifactId>
+			<version>1.5.1</version>
 		</dependency>
-
-
 	</dependencies>
 
 	<build>
 		<sourceDirectory>src</sourceDirectory>
-
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -57,6 +54,8 @@
 						<manifest>
 							<addClasspath>true</addClasspath>
 							<mainClass>me.ipodtouch0218.jackboxdrawer.JackboxDrawer</mainClass>
+							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+							<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
 						</manifest>
 					</archive>
 				</configuration>

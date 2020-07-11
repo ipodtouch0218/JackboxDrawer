@@ -34,13 +34,13 @@ public class WebsocketServer extends WebSocketServer {
 		if (message.startsWith("updategame")) {
 			SupportedGames previous = drawer.currentGame;
 			drawer.changeGame(SupportedGames.valueOf(message.split(":")[1].toUpperCase()));
-			drawer.gameButtons.forEach((game,button) -> {
+			drawer.gameSelectionButtons.forEach((game,button) -> {
 				button.setSelected(game == drawer.currentGame);
 			});
 			if (previous == drawer.currentGame) {
 				return;
 			}
-			JOptionPane.showMessageDialog(drawer.frame, "Selected game updated to " + drawer.currentGame.getName(), "Selected Game Updated", JOptionPane.INFORMATION_MESSAGE);
+			JOptionPane.showMessageDialog(drawer.window, "Selected game updated to " + drawer.currentGame.getName(), "Selected Game Updated", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
 	}

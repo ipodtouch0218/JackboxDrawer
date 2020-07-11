@@ -1,7 +1,5 @@
 package me.ipodtouch0218.jackboxdrawer;
 
-import java.awt.Color;
-
 public class PushTheButtonLine {
 
 	public PushTheButtonLine(Line line) {
@@ -17,7 +15,7 @@ public class PushTheButtonLine {
 	
 	String points;
 	int thickness;
-	Color color;
+	String color;
 	
 	public String getPoints() {
 		return points;
@@ -28,11 +26,12 @@ public class PushTheButtonLine {
 	}
 	
 	public String getColor() {
-		return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+		return color;
 	}
-	
+
 	@Override
 	public String toString() {
-		return "Line [points=" + points + ", thickness=" + thickness + ", color=" + color + "]";
+		return "PushTheButtonLine [points=" + points + ", thickness=" + thickness + ", color=" + color + "]";
 	}
+	
 }
