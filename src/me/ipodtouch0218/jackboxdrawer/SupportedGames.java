@@ -79,7 +79,6 @@ public enum SupportedGames {
 		}
 		return false;
 	}),
-	
 	;
 
 	private String prettyName;

@@ -5,6 +5,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
@@ -24,6 +25,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
@@ -52,9 +54,11 @@ import javax.swing.event.ChangeListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 import me.ipodtouch0218.jackboxdrawer.SupportedGames.ImageType;
+import javax.swing.JButton;
 
 public class JackboxDrawer {
 
+	private static List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
 	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300, VECTOR_IMPORT_SCALE_FACTOR = 5;
 	private final BufferedImage transparentTexture = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	{
@@ -68,12 +72,13 @@ public class JackboxDrawer {
 	}
 	
 	JFrame window;
+	JPanel teekoPanel, drawPanel;
 	WebsocketServer websocketServer;
 	SupportedGames currentGame = SupportedGames.DRAWFUL_2;
 	EnumMap<SupportedGames, JRadioButtonMenuItem> gameSelectionButtons = new EnumMap<>(SupportedGames.class);
 	JColorChooser teeKOBackgroundColorPicker;
 	private JMenuItem mntmRedo, mntmUndo;
-	private JLabel sketchpad, lblTeeKo;
+	private JLabel sketchpad, lblShirtWarning;
 	BufferedImage drawnToScreenImage = new BufferedImage(CANVAS_WIDTH*2,CANVAS_HEIGHT*2, BufferedImage.TYPE_INT_RGB), rasterBackgroundImage, actualImage;
 	private boolean drawing, erasing;
 	int importLines, currentLine;
@@ -96,8 +101,9 @@ public class JackboxDrawer {
 	 */
 	private void initialize() {
 		window = new JFrame();
-		window.setTitle("Jackbox Drawer v1.0.0");
-		window.setBounds(100, 100, 925, 598);
+		window.setTitle("Jackbox Drawer v1.0.1");
+		window.setBounds(100, 100, 1018, 612);
+		window.setMinimumSize(new Dimension(736, 612));
 		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		GridBagLayout gridBagLayout = new GridBagLayout();
 		gridBagLayout.columnWidths = new int[]{0, 0};
@@ -106,18 +112,18 @@ public class JackboxDrawer {
 		gridBagLayout.rowWeights = new double[]{1.0, Double.MIN_VALUE};
 		window.getContentPane().setLayout(gridBagLayout);
 		
-		JPanel panel = new JPanel();
-		GridBagConstraints gbc_panel = new GridBagConstraints();
-		gbc_panel.fill = GridBagConstraints.BOTH;
-		gbc_panel.gridx = 0;
-		gbc_panel.gridy = 0;
-		window.getContentPane().add(panel, gbc_panel);
-		GridBagLayout gbl_panel = new GridBagLayout();
-		gbl_panel.columnWidths = new int[]{0, 0, 0};
-		gbl_panel.rowHeights = new int[]{0, 0, 0, 0, 0, 0};
-		gbl_panel.columnWeights = new double[]{Double.MIN_VALUE};
-		gbl_panel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
-		panel.setLayout(gbl_panel);
+		JPanel mainPanel = new JPanel();
+		GridBagConstraints gbc_mainPanel = new GridBagConstraints();
+		gbc_mainPanel.fill = GridBagConstraints.BOTH;
+		gbc_mainPanel.gridx = 0;
+		gbc_mainPanel.gridy = 0;
+		window.getContentPane().add(mainPanel, gbc_mainPanel);
+		GridBagLayout gbl_mainPanel = new GridBagLayout();
+		gbl_mainPanel.columnWidths = new int[]{0, 0, 0, 0};
+		gbl_mainPanel.rowHeights = new int[]{0, 0, 0, 0, 0};
+		gbl_mainPanel.columnWeights = new double[]{1, 0.0, 0.0, Double.MIN_VALUE};
+		gbl_mainPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 1.0};
+		mainPanel.setLayout(gbl_mainPanel);
 		
 		JMenuBar menuBar = new JMenuBar();
 		window.setJMenuBar(menuBar);
@@ -280,16 +286,6 @@ public class JackboxDrawer {
 		mnSelectGame.add(rdbtnmntmTriviaMurderParty_1);
 		game.add(rdbtnmntmTriviaMurderParty_1);
 		
-		JRadioButtonMenuItem rdbtnmntmPatentlyStupid = new JRadioButtonMenuItem("Patently Stupid");
-		rdbtnmntmPatentlyStupid.setEnabled(false);
-		mnSelectGame.add(rdbtnmntmPatentlyStupid);
-		game.add(rdbtnmntmPatentlyStupid);
-		
-		JRadioButtonMenuItem rdbtnmntmTriviaMurderParty_2 = new JRadioButtonMenuItem("Trivia Murder Party 2");
-		rdbtnmntmTriviaMurderParty_2.setEnabled(false);
-		mnSelectGame.add(rdbtnmntmTriviaMurderParty_2);
-		game.add(rdbtnmntmTriviaMurderParty_2);
-		
 		JRadioButtonMenuItem rdbtnmntmPushTheButton = new JRadioButtonMenuItem("Push the Button");
 		gameSelectionButtons.put(SupportedGames.PUSH_THE_BUTTON, rdbtnmntmPushTheButton);
 		rdbtnmntmPushTheButton.addActionListener(new ActionListener() {
@@ -300,33 +296,52 @@ public class JackboxDrawer {
 		mnSelectGame.add(rdbtnmntmPushTheButton);
 		game.add(rdbtnmntmPushTheButton);
 		
+		JSeparator separator_3 = new JSeparator();
+		separator_3.setOrientation(SwingConstants.VERTICAL);
+		GridBagConstraints gbc_separator_3 = new GridBagConstraints();
+		gbc_separator_3.fill = GridBagConstraints.VERTICAL;
+		gbc_separator_3.gridheight = 5;
+		gbc_separator_3.insets = new Insets(0, 0, 0, 5);
+		gbc_separator_3.gridx = 1;
+		gbc_separator_3.gridy = 0;
+		mainPanel.add(separator_3, gbc_separator_3);
+		
 		JLabel lblBrushSettings = new JLabel("Brush Settings");
 		GridBagConstraints gbc_lblBrushSettings = new GridBagConstraints();
 		gbc_lblBrushSettings.insets = new Insets(0, 0, 5, 0);
 		gbc_lblBrushSettings.gridwidth = 2;
-		gbc_lblBrushSettings.gridx = 1;
+		gbc_lblBrushSettings.gridx = 2;
 		gbc_lblBrushSettings.gridy = 0;
-		panel.add(lblBrushSettings, gbc_lblBrushSettings);
+		mainPanel.add(lblBrushSettings, gbc_lblBrushSettings);
 		
-		JPanel drawPanel = new JPanel();
+		drawPanel = new JPanel();
 		drawPanel.setBorder(null);
 		GridBagConstraints gbc_drawPanel = new GridBagConstraints();
-		gbc_drawPanel.gridheight = 6;
-		gbc_drawPanel.insets = new Insets(0, 0, 5, 5);
+		gbc_drawPanel.gridheight = 5;
+		gbc_drawPanel.insets = new Insets(0, 0, 0, 5);
 		gbc_drawPanel.fill = GridBagConstraints.BOTH;
 		gbc_drawPanel.gridx = 0;
 		gbc_drawPanel.gridy = 0;
-		panel.add(drawPanel, gbc_drawPanel);
+		mainPanel.add(drawPanel, gbc_drawPanel);
 		drawPanel.setLayout(new BorderLayout(0, 0));
+		
+		JSeparator separator_4 = new JSeparator();
+		GridBagConstraints gbc_separator_4 = new GridBagConstraints();
+		gbc_separator_4.fill = GridBagConstraints.HORIZONTAL;
+		gbc_separator_4.gridwidth = 2;
+		gbc_separator_4.insets = new Insets(0, 0, 5, 5);
+		gbc_separator_4.gridx = 2;
+		gbc_separator_4.gridy = 2;
+		mainPanel.add(separator_4, gbc_separator_4);
 		
 		
 		JLabel lblBrushThickness = new JLabel("Brush Thickness");
 		GridBagConstraints gbc_lblBrushThickness = new GridBagConstraints();
 		gbc_lblBrushThickness.anchor = GridBagConstraints.NORTH;
 		gbc_lblBrushThickness.insets = new Insets(0, 0, 5, 5);
-		gbc_lblBrushThickness.gridx = 1;
-		gbc_lblBrushThickness.gridy = 2;
-		panel.add(lblBrushThickness, gbc_lblBrushThickness);
+		gbc_lblBrushThickness.gridx = 2;
+		gbc_lblBrushThickness.gridy = 3;
+		mainPanel.add(lblBrushThickness, gbc_lblBrushThickness);
 		
 		JSpinner thicknessSpinner = new JSpinner();
 		thicknessSpinner.setModel(new SpinnerNumberModel(6, 1, null, 1));
@@ -334,9 +349,9 @@ public class JackboxDrawer {
 		gbc_thicknessSpinner.insets = new Insets(0, 0, 5, 0);
 		gbc_thicknessSpinner.ipadx = 20;
 		gbc_thicknessSpinner.anchor = GridBagConstraints.NORTH;
-		gbc_thicknessSpinner.gridx = 2;
-		gbc_thicknessSpinner.gridy = 2;
-		panel.add(thicknessSpinner, gbc_thicknessSpinner);
+		gbc_thicknessSpinner.gridx = 3;
+		gbc_thicknessSpinner.gridy = 3;
+		mainPanel.add(thicknessSpinner, gbc_thicknessSpinner);
 		
 		JColorChooser brushChooser = new JColorChooser();
 		brushChooser.setColor(Color.black);
@@ -366,10 +381,10 @@ public class JackboxDrawer {
 		GridBagConstraints gbc_brushChooser = new GridBagConstraints();
 		gbc_brushChooser.anchor = GridBagConstraints.WEST;
 		gbc_brushChooser.gridwidth = 2;
-		gbc_brushChooser.insets = new Insets(0, 5, 5, 0);
-		gbc_brushChooser.gridx = 1;
+		gbc_brushChooser.insets = new Insets(0, 0, 5, 0);
+		gbc_brushChooser.gridx = 2;
 		gbc_brushChooser.gridy = 1;
-		panel.add(brushChooser, gbc_brushChooser);
+		mainPanel.add(brushChooser, gbc_brushChooser);
 		
 		sketchpad = new JLabel("") {
 			private static final long serialVersionUID = 1L;
@@ -490,19 +505,133 @@ public class JackboxDrawer {
 		});
 		drawPanel.add(sketchpad, BorderLayout.CENTER);
 		
-		lblTeeKo = new JLabel("Tee K.O. Background Color");
-		GridBagConstraints gbc_lblTeeKo = new GridBagConstraints();
-		gbc_lblTeeKo.insets = new Insets(0, 0, 5, 0);
-		gbc_lblTeeKo.gridwidth = 2;
-		gbc_lblTeeKo.gridx = 1;
-		gbc_lblTeeKo.gridy = 3;
-		lblTeeKo.setVisible(false);
-		panel.add(lblTeeKo, gbc_lblTeeKo);
+		
+		teekoPanel = new JPanel();
+		GridBagConstraints gbc_teekoPanel = new GridBagConstraints();
+		gbc_teekoPanel.gridwidth = 2;
+		gbc_teekoPanel.fill = GridBagConstraints.BOTH;
+		gbc_teekoPanel.gridx = 2;
+		gbc_teekoPanel.gridy = 4;
+		mainPanel.add(teekoPanel, gbc_teekoPanel);
+		GridBagLayout gbl_teekoPanel = new GridBagLayout();
+		gbl_teekoPanel.columnWidths = new int[]{0, 0, 0, 0, 0, 0, 0};
+		gbl_teekoPanel.rowHeights = new int[]{0, 0, 0, 0, 0, 0};
+		gbl_teekoPanel.columnWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+		gbl_teekoPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+		teekoPanel.setLayout(gbl_teekoPanel);
+		
+		JSeparator separator_1 = new JSeparator();
+		GridBagConstraints gbc_separator_1 = new GridBagConstraints();
+		gbc_separator_1.fill = GridBagConstraints.HORIZONTAL;
+		gbc_separator_1.gridwidth = 6;
+		gbc_separator_1.insets = new Insets(0, 0, 5, 5);
+		gbc_separator_1.gridx = 0;
+		gbc_separator_1.gridy = 0;
+		teekoPanel.add(separator_1, gbc_separator_1);
+		
+		JLabel lblTeeKoBackground = new JLabel("Tee K.O. Background Color");
+		GridBagConstraints gbc_lblTeeKoBackground = new GridBagConstraints();
+		gbc_lblTeeKoBackground.gridwidth = 6;
+		gbc_lblTeeKoBackground.insets = new Insets(0, 0, 5, 0);
+		gbc_lblTeeKoBackground.gridx = 0;
+		gbc_lblTeeKoBackground.gridy = 1;
+		teekoPanel.add(lblTeeKoBackground, gbc_lblTeeKoBackground);
 		
 		teeKOBackgroundColorPicker = new JColorChooser();
-		teeKOBackgroundColorPicker.setColor(Color.BLACK);
+		GridBagConstraints gbc_teeKOBackgroundColorPicker = new GridBagConstraints();
+		gbc_teeKOBackgroundColorPicker.gridwidth = 6;
+		gbc_teeKOBackgroundColorPicker.insets = new Insets(0, 0, 5, 0);
+		gbc_teeKOBackgroundColorPicker.gridx = 0;
+		gbc_teeKOBackgroundColorPicker.gridy = 2;
+		teekoPanel.add(teeKOBackgroundColorPicker, gbc_teeKOBackgroundColorPicker);
 		teeKOBackgroundColorPicker.setPreviewPanel(new JPanel());
 		teeKOBackgroundColorPicker.setChooserPanels(new AbstractColorChooserPanel[]{teeKOBackgroundColorPicker.getChooserPanels()[1]});
+		teeKOBackgroundColorPicker.setColor(TEEKO_BG_COLORS.get(0));
+		
+		JButton btnBlue = new JButton("Blue");
+		btnBlue.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				teeKOBackgroundColorPicker.setColor(btnBlue.getBackground());
+				sketchpad.repaint();
+			}
+		});
+		btnBlue.setForeground(Color.WHITE);
+		btnBlue.setBackground(TEEKO_BG_COLORS.get(0));
+		GridBagConstraints gbc_btnBlue = new GridBagConstraints();
+		gbc_btnBlue.insets = new Insets(0, 10, 5, 5);
+		gbc_btnBlue.gridx = 0;
+		gbc_btnBlue.gridy = 3;
+		teekoPanel.add(btnBlue, gbc_btnBlue);
+		
+		JButton btnGray = new JButton("Gray");
+		btnGray.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				teeKOBackgroundColorPicker.setColor(btnGray.getBackground());
+				sketchpad.repaint();
+			}
+		});
+		btnGray.setForeground(Color.WHITE);
+		btnGray.setBackground(TEEKO_BG_COLORS.get(1));
+		GridBagConstraints gbc_btnGray = new GridBagConstraints();
+		gbc_btnGray.insets = new Insets(0, 0, 5, 5);
+		gbc_btnGray.gridx = 1;
+		gbc_btnGray.gridy = 3;
+		teekoPanel.add(btnGray, gbc_btnGray);
+		
+		JButton btnBlack = new JButton("Black");
+		btnBlack.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				teeKOBackgroundColorPicker.setColor(btnBlack.getBackground());
+				sketchpad.repaint();
+			}
+		});
+		btnBlack.setForeground(Color.WHITE);
+		btnBlack.setBackground(TEEKO_BG_COLORS.get(2));
+		GridBagConstraints gbc_btnBlack = new GridBagConstraints();
+		gbc_btnBlack.insets = new Insets(0, 0, 5, 5);
+		gbc_btnBlack.gridx = 2;
+		gbc_btnBlack.gridy = 3;
+		teekoPanel.add(btnBlack, gbc_btnBlack);
+		
+		JButton btnRed = new JButton("Red");
+		btnRed.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				teeKOBackgroundColorPicker.setColor(btnRed.getBackground());
+				sketchpad.repaint();
+			}
+		});
+		btnRed.setForeground(Color.WHITE);
+		btnRed.setBackground(TEEKO_BG_COLORS.get(3));
+		GridBagConstraints gbc_btnRed = new GridBagConstraints();
+		gbc_btnRed.insets = new Insets(0, 0, 5, 5);
+		gbc_btnRed.gridx = 3;
+		gbc_btnRed.gridy = 3;
+		teekoPanel.add(btnRed, gbc_btnRed);
+		
+		JButton btnOlive = new JButton("Olive");
+		btnOlive.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				teeKOBackgroundColorPicker.setColor(btnOlive.getBackground());
+				sketchpad.repaint();
+			}
+		});
+		btnOlive.setForeground(Color.WHITE);
+		btnOlive.setBackground(TEEKO_BG_COLORS.get(4));
+		GridBagConstraints gbc_btnOlive = new GridBagConstraints();
+		gbc_btnOlive.insets = new Insets(0, 0, 5, 5);
+		gbc_btnOlive.anchor = GridBagConstraints.WEST;
+		gbc_btnOlive.gridx = 4;
+		gbc_btnOlive.gridy = 3;
+		teekoPanel.add(btnOlive, gbc_btnOlive);
+		
+		lblShirtWarning = new JLabel("You cannot purchase this shirt because it has a custom background color!");
+		lblShirtWarning.setForeground(new Color(204, 0, 0));
+		lblShirtWarning.setVisible(false);
+		GridBagConstraints gbc_lblShirtWarning = new GridBagConstraints();
+		gbc_lblShirtWarning.gridwidth = 6;
+		gbc_lblShirtWarning.gridx = 0;
+		gbc_lblShirtWarning.gridy = 4;
+		teekoPanel.add(lblShirtWarning, gbc_lblShirtWarning);
 		
 		for (Component comp : teeKOBackgroundColorPicker.getChooserPanels()[0].getComponents()) {
 			comp.addMouseMotionListener(new MouseMotionAdapter() {
@@ -553,22 +682,13 @@ public class JackboxDrawer {
 				});
 			}
 		}
-		teeKOBackgroundColorPicker.setVisible(false);
-		teeKOBackgroundColorPicker.setColor(Color.WHITE);
-		GridBagConstraints gbc_teekoBackgroundChooser = new GridBagConstraints();
-		gbc_teekoBackgroundChooser.insets = new Insets(0, 5, 5, 0);
-		gbc_teekoBackgroundChooser.gridwidth = 2;
-		gbc_teekoBackgroundChooser.gridx = 1;
-		gbc_teekoBackgroundChooser.gridy = 4;
-		panel.add(teeKOBackgroundColorPicker, gbc_teekoBackgroundChooser);
 		
 		
 	}
 	
 	public void changeGame(SupportedGames game) {
 		currentGame = game;
-		teeKOBackgroundColorPicker.setVisible(currentGame == SupportedGames.TEE_KO);
-		lblTeeKo.setVisible(currentGame == SupportedGames.TEE_KO);
+		teekoPanel.setVisible(currentGame == SupportedGames.TEE_KO);
 		sketchpad.repaint();
 	}
 	
@@ -612,19 +732,26 @@ public class JackboxDrawer {
 	
 	private void repaintImage() {
 		Graphics2D g = drawnToScreenImage.createGraphics();
-		g.setPaint(new TexturePaint(transparentTexture, new Rectangle(0,0,40,40)));
-		g.fill(new Rectangle(0,0, 240*2, 300*2));
 		
 		actualImage = new BufferedImage(240, 300, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g1 = actualImage.createGraphics();
 		
-		if (currentGame.getImageType() == ImageType.BITMAP && rasterBackgroundImage != null) {
-			g1.drawImage(rasterBackgroundImage, 0, 0, 240, 300, null);
-		}
-		
 		if (currentGame == SupportedGames.TEE_KO) {
 			g1.setColor(teeKOBackgroundColorPicker.getColor());
+			drawPanel.setBackground(g1.getColor());
+			lblShirtWarning.setVisible(!TEEKO_BG_COLORS.contains(g1.getColor()));
 			g1.fill(new Rectangle(0,0, 240, 300));
+			g1.setColor(getContrastColor(g1.getColor()));
+			g1.setStroke(new BasicStroke(3f));
+			g1.drawRect(0, 0, CANVAS_WIDTH-1, CANVAS_HEIGHT-1);
+		} else {
+			drawPanel.setBackground(teekoPanel.getBackground());
+			g.setPaint(new TexturePaint(transparentTexture, new Rectangle(0,0,40,40)));
+			g.fill(new Rectangle(0,0, 240*2, 300*2));
+		}
+		
+		if (currentGame.getImageType() == ImageType.BITMAP && rasterBackgroundImage != null) {
+			g1.drawImage(rasterBackgroundImage, 0, 0, 240, 300, null);
 		}
 		
 		int linesDrawn = 0;
@@ -645,4 +772,9 @@ public class JackboxDrawer {
 		g.dispose();
 		g1.dispose();
 	}
+	
+	private Color getContrastColor(Color color) {
+		  double y = (299 * color.getRed() + 587 * color.getGreen() + 114 * color.getBlue()) / 1000;
+		  return y >= 128 ? Color.black : Color.white;
+		}
 }

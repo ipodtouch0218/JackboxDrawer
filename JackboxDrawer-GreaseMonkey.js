@@ -1,7 +1,8 @@
 // ==UserScript==
-// @name     JackboxDrawer
-// @version  uwu~
-// @include  *://jackbox.tv/*
+// @name       JackboxDrawer
+// @namespace  ipodtouch0218
+// @version    1.0.0
+// @include    *://jackbox.tv/*
 // ==/UserScript==
 
 //Catch outgoing messages and replace drawing data.
@@ -164,20 +165,21 @@ setInterval(function() {
     //Check to make sure we can actually DRAW right now.
     //If not, even attempting to submit a drawing can easily crash our webpage.
     
-    if (typeof (games[gameID]) === 'undefined' || games[gameID] == null) {
+    let currentGame = games[gameID];
+    if (typeof (currentGame) === 'undefined' || currentGame == null) {
     	alert("Game not supported!");
       return;
     }
     
     
-    if (!games[gameID].isInDrawingMode()) {
+    if (!currentGame.isInDrawingMode()) {
       alert("Cannot submit drawing: Not in drawing mode!");
       window.eval("var tempvar = null;");
       return;
     }
     
     //Find the current sketchpad. We need it for later...
-    let sketchpad = games[gameID].getSketchpad();
+    let sketchpad = currentGame.getSketchpad();
     if (sketchpad == null) {
       //Couldn't find it, we're probably can't draw right now. Somehow, the previous checks failed.
       return;
@@ -199,7 +201,7 @@ setInterval(function() {
     sketchpad.dispatchEvent(mouseEvent);
     
     //Submit drawing and get ready to switch-a-roo.
-    games[gameID].submitDrawing();
+    currentGame.submitDrawing();
   };
   
   //Socket died, my dude.
