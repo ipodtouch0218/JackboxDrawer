@@ -2,7 +2,7 @@
 // @name         JackboxDrawer
 // @description  Allows custom brush sizes, colors, and even importing images into Jackbox's drawing games!
 // @namespace    ipodtouch0218/JackboxDrawer
-// @version      1.0.1
+// @version      1.0.2
 // @include      *://jackbox.tv/*
 // ==/UserScript==
 
