@@ -163,9 +163,9 @@ setInterval(function() {
     //Check for the proper version.
     if (event.data.startsWith("version")) {
         var version = event.data.split(":")[1];
-        if (version > 101) {
+        if (version > 102) {
             alert("Please update the JackboxDrawer Greasemonkey script!");
-        } else if (version < 101) {
+        } else if (version < 102) {
             alert("Please update the JackboxDrawer Java program!\nThe download can be found here: https://github.com/ipodtouch0218/JackboxDrawer/releases");
         }
         return;

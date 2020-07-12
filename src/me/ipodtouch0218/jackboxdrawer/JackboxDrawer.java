@@ -58,10 +58,11 @@ import javax.swing.JButton;
 
 public class JackboxDrawer {
 
-	public static final String VERSION = "1.0.1";
+	public static final String VERSION = "1.0.2";
 	
 	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
-	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300, VECTOR_IMPORT_SCALE_FACTOR = 5;
+	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300;
+	private static final double VECTOR_IMPORT_SCALE_FACTOR = 3.5, VECTOR_IMPORT_PALETTE_SENSITIVITY = 35;
 	private final BufferedImage transparentTexture = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	{
 		Graphics2D g = transparentTexture.createGraphics();
@@ -493,8 +494,7 @@ public class JackboxDrawer {
 					}
 				} else if (drawing) {
 					Line line = lines.get(lines.size()-1);
-					int half = line.getThickness()/2;
-					if (x-half < 0 || x+half >= 240 || y-half < 0 || y+half >= 300) {
+					if (x < 0 || x >= 240 || y < 0 || y >= 300) {
 						return;
 					}
 					Point newPoint = new Point(x,y);
@@ -701,29 +701,30 @@ public class JackboxDrawer {
 		} else {
 			scaling = Image.SCALE_SMOOTH;
 		}
-		Image tmp = loadedImage.getScaledInstance(CANVAS_WIDTH/VECTOR_IMPORT_SCALE_FACTOR, CANVAS_HEIGHT/VECTOR_IMPORT_SCALE_FACTOR, scaling);
-		loadedImage = new BufferedImage(tmp.getWidth(null), tmp.getHeight(null), BufferedImage.TYPE_USHORT_555_RGB);
+		Image tmp = loadedImage.getScaledInstance((int) (CANVAS_WIDTH/VECTOR_IMPORT_SCALE_FACTOR), (int) (CANVAS_HEIGHT/VECTOR_IMPORT_SCALE_FACTOR), scaling);
+		loadedImage = new BufferedImage(tmp.getWidth(null), tmp.getHeight(null), BufferedImage.TYPE_INT_RGB);
 		
 		lines = lines.subList(importLines, currentLine);
 		
 		Graphics2D g2d = loadedImage.createGraphics();
 		g2d.drawImage(tmp, 0, 0, null);
 		g2d.dispose();
+		
 		int i = 0;
-		for (int y = 0; y < loadedImage.getHeight(); y++) {
-			for (int x = 0; x < loadedImage.getWidth(); x++) {
+		for (int x = 0; x < loadedImage.getWidth(); x++) {
+			for (int y = 0; y < loadedImage.getHeight(); y++) {
 				int clr = loadedImage.getRGB(x, y);
 				Color color = new Color(clr);
-				Line newLine = new Line(VECTOR_IMPORT_SCALE_FACTOR+1, color);
-				newLine.points.add(new Point(x*VECTOR_IMPORT_SCALE_FACTOR,y*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2));
+				Line newLine = new Line((int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR), color);
+				newLine.points.add(new Point((int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (y*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2)));
 				
-				int x1 = x+1;
-				while (x1 < loadedImage.getWidth() && loadedImage.getRGB(x1, y) == clr) {
-					x1++;
+				int y1 = y+1;
+				while (y1 < loadedImage.getHeight() && Math.sqrt(colorDistance(loadedImage.getRGB(x, y1), clr)) < VECTOR_IMPORT_PALETTE_SENSITIVITY) {
+					y1++;
 				}
 				
-				newLine.points.add(new Point(x1*VECTOR_IMPORT_SCALE_FACTOR,y*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2));
-				x = x1-1;
+				newLine.points.add(new Point((int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (y1*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2)));
+				y = y1-1;
 				
 				lines.add(i++, newLine);
 			}
@@ -760,7 +761,7 @@ public class JackboxDrawer {
 		lines:
 		for (Line line : lines) {
 			if (linesDrawn++ >= currentLine) break lines;
-			if (linesDrawn < importLines && currentGame.getImageType() == ImageType.BITMAP) continue lines;
+			if (linesDrawn <= importLines && currentGame.getImageType() == ImageType.BITMAP) continue lines;
 			g1.setColor(Color.decode(line.color));
 			g1.setStroke(new BasicStroke(line.thickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 			for (int i = 0; i+1 < line.points.size(); i++) {
@@ -776,7 +777,17 @@ public class JackboxDrawer {
 	}
 	
 	private Color getContrastColor(Color color) {
-		  double y = (299 * color.getRed() + 587 * color.getGreen() + 114 * color.getBlue()) / 1000;
-		  return y >= 128 ? Color.black : Color.white;
-		}
+		double y = (299 * color.getRed() + 587 * color.getGreen() + 114 * color.getBlue()) / 1000;
+		return y >= 128 ? Color.black : Color.white;
+	}
+	
+    public static double colorDistance(int c1, int c2) {
+        int red1 = (c1 & 0xff0000) >> 16;
+        int red2 = (c2 & 0xff0000) >> 16;
+        int rmean = (red1 + red2) >> 1;
+        int r = red1 - red2;
+        int g = ((c1 & 0xff00) >> 8) - ((c2 & 0xff00) >> 8);
+        int b = (c1 & 0xff) - (c2 & 0xff);
+        return (((512+rmean)*r*r)>>8) + 4*g*g + (((767-rmean)*b*b)>>8);
+    }
 }
