@@ -11,6 +11,9 @@ import javax.imageio.ImageIO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import me.ipodtouch0218.jackboxdrawer.obj.Line;
+import me.ipodtouch0218.jackboxdrawer.obj.PushTheButtonLine;
+
 public enum SupportedGames {
 	
 	DRAWFUL_1("Drawful 1", ImageType.BITMAP, (jbd) -> {

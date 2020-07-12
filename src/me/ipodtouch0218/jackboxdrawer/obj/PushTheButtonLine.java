@@ -1,4 +1,4 @@
-package me.ipodtouch0218.jackboxdrawer;
+package me.ipodtouch0218.jackboxdrawer.obj;
 
 public class PushTheButtonLine {
 

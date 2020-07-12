@@ -1,4 +1,4 @@
-package me.ipodtouch0218.jackboxdrawer;
+package me.ipodtouch0218.jackboxdrawer.obj;
 
 import java.awt.Color;
 import java.util.ArrayList;
@@ -14,9 +14,9 @@ public class Line {
 		this.color = String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
 	}
 	
-	ArrayList<Point> points = new ArrayList<>();
-	int thickness;
-	String color;
+	public ArrayList<Point> points = new ArrayList<>();
+	public int thickness;
+	public String color;
 	
 	public Point[] getPoints() {
 		return points.toArray(new Point[]{});

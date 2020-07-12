@@ -54,15 +54,21 @@ import javax.swing.event.ChangeListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 import me.ipodtouch0218.jackboxdrawer.SupportedGames.ImageType;
+import me.ipodtouch0218.jackboxdrawer.obj.Line;
+import me.ipodtouch0218.jackboxdrawer.obj.Point;
+import me.ipodtouch0218.jackboxdrawer.uielements.JPanelDnD;
+import me.ipodtouch0218.jackboxdrawer.uielements.StretchIcon;
+
 import javax.swing.JButton;
 
 public class JackboxDrawer {
 
+	public static JackboxDrawer INSTANCE;
 	public static final String VERSION = "1.0.2";
 	
 	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
 	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300;
-	private static final double VECTOR_IMPORT_SCALE_FACTOR = 3.5, VECTOR_IMPORT_PALETTE_SENSITIVITY = 35;
+	private static double VECTOR_IMPORT_SCALE_FACTOR = 3.5, VECTOR_IMPORT_PALETTE_SENSITIVITY = 35;
 	private final BufferedImage transparentTexture = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	{
 		Graphics2D g = transparentTexture.createGraphics();
@@ -81,14 +87,15 @@ public class JackboxDrawer {
 	EnumMap<SupportedGames, JRadioButtonMenuItem> gameSelectionButtons = new EnumMap<>(SupportedGames.class);
 	JColorChooser teeKOBackgroundColorPicker;
 	private JMenuItem mntmRedo, mntmUndo;
-	private JLabel sketchpad, lblShirtWarning;
+	public JLabel sketchpad;
+	private JLabel lblShirtWarning;
 	BufferedImage drawnToScreenImage = new BufferedImage(CANVAS_WIDTH*2,CANVAS_HEIGHT*2, BufferedImage.TYPE_INT_RGB), rasterBackgroundImage, actualImage;
 	private boolean drawing, erasing;
 	int importLines, currentLine;
 	List<Line> lines = new ArrayList<>();
 	
 	public static void main(String[] args) {
-		new JackboxDrawer();
+		INSTANCE = new JackboxDrawer();
 	}
 	
 	public JackboxDrawer() {
@@ -115,7 +122,7 @@ public class JackboxDrawer {
 		gridBagLayout.rowWeights = new double[]{1.0, Double.MIN_VALUE};
 		window.getContentPane().setLayout(gridBagLayout);
 		
-		JPanel mainPanel = new JPanel();
+		JPanel mainPanel = new JPanelDnD();
 		GridBagConstraints gbc_mainPanel = new GridBagConstraints();
 		gbc_mainPanel.fill = GridBagConstraints.BOTH;
 		gbc_mainPanel.gridx = 0;
@@ -694,7 +701,7 @@ public class JackboxDrawer {
 		sketchpad.repaint();
 	}
 	
-	private void importFromImage(BufferedImage loadedImage) {
+	public void importFromImage(BufferedImage loadedImage) {
 		int scaling;
 		if (loadedImage.getWidth()%CANVAS_WIDTH == 0 && loadedImage.getHeight()%CANVAS_HEIGHT == 0) {
 			scaling = Image.SCALE_FAST;

@@ -1,7 +1,7 @@
 /**
  * @(#)StretchIcon.java	1.0 03/27/12
  */
-package me.ipodtouch0218.jackboxdrawer;
+package me.ipodtouch0218.jackboxdrawer.uielements;
 
 import java.awt.Component;
 import java.awt.Container;
