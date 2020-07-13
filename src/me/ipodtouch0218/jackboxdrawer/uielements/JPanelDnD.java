@@ -57,12 +57,7 @@ public class JPanelDnD extends JPanel implements DropTargetListener {
                     for (Object value : ((List<Object>) td)) {
                         if (value instanceof File) {
                             File file = (File) value;
-                            String name = file.getName().toLowerCase();
-                            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg")) {
-                            	JackboxDrawer.INSTANCE.importFromImage(ImageIO.read(file));
-                            	JackboxDrawer.INSTANCE.sketchpad.repaint();
-                                break;
-                            }
+                            JackboxDrawer.INSTANCE.tryImportFile(file);
                         }
                     }
                 }
