@@ -29,6 +29,8 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 import javax.swing.ButtonGroup;
@@ -62,7 +64,12 @@ public class JackboxDrawer {
 	
 	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
 	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300;
-	private static final double VECTOR_IMPORT_SCALE_FACTOR = 3.5, VECTOR_IMPORT_PALETTE_SENSITIVITY = 35;
+	private static final double 
+	VECTOR_IMPORT_SCALE_FACTOR = 3.5, 
+	COLOR_WEIGHTING = 1.0,
+	DISTANCE_WEIGHTING = -25.0,
+	STRIP_MATCH = 1.2,
+	MIN_COLOR_DIST = 35;
 	private final BufferedImage transparentTexture = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	{
 		Graphics2D g = transparentTexture.createGraphics();
@@ -156,12 +163,16 @@ public class JackboxDrawer {
 			    	
 			    	try {
 			    		BufferedImage loadedImage = ImageIO.read(file);
-			    		importFromImage(loadedImage);
+			    		if(loadedImage == null)
+			    			throw new IOException("read fail");
+			    		int lines = importFromImage(loadedImage);
+			    		sketchpad.repaint();
+			    		JOptionPane.showMessageDialog(window, lines + " lines drawn!", "Loaded Image!", JOptionPane.INFORMATION_MESSAGE); 
 			    		rasterBackgroundImage = loadedImage;
-					} catch (IOException e1) {
+					} catch (Exception e1) {
+						JOptionPane.showMessageDialog(window, "File could not be read.\n", "Error!", JOptionPane.ERROR_MESSAGE);
 						e1.printStackTrace();
 					}
-			    	sketchpad.repaint();
 			    }
 			}
 		});
@@ -694,7 +705,7 @@ public class JackboxDrawer {
 		sketchpad.repaint();
 	}
 	
-	private void importFromImage(BufferedImage loadedImage) {
+	private int importFromImage(BufferedImage loadedImage) {
 		int scaling;
 		if (loadedImage.getWidth()%CANVAS_WIDTH == 0 && loadedImage.getHeight()%CANVAS_HEIGHT == 0) {
 			scaling = Image.SCALE_FAST;
@@ -710,29 +721,185 @@ public class JackboxDrawer {
 		g2d.drawImage(tmp, 0, 0, null);
 		g2d.dispose();
 		
-		int i = 0;
+		int lineCount = 0;
 		for (int x = 0; x < loadedImage.getWidth(); x++) {
-			for (int y = 0; y < loadedImage.getHeight(); y++) {
-				int clr = loadedImage.getRGB(x, y);
-				Color color = new Color(clr);
-				Line newLine = new Line((int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR), color);
-				newLine.points.add(new Point((int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (y*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2)));
-				
-				int y1 = y+1;
-				while (y1 < loadedImage.getHeight() && Math.sqrt(colorDistance(loadedImage.getRGB(x, y1), clr)) < VECTOR_IMPORT_PALETTE_SENSITIVITY) {
-					y1++;
+			ArrayList<Line> linePyramid = new ArrayList<Line>();
+			int yStart = 0;
+			int pixelsInLine = 0;
+			int startClr = loadedImage.getRGB(x, 0);
+			int[] avgClr = {0,0,0};
+			//LOOP START
+			for(int y = 0; y < loadedImage.getHeight(); y++) {
+				int clr = loadedImage.getRGB(x,y);
+				boolean match = COLOR_WEIGHTING*Math.sqrt(colorDistance(clr, startClr)) +
+								DISTANCE_WEIGHTING*(y-yStart)/loadedImage.getHeight() <
+								MIN_COLOR_DIST;
+				if(!match || y+1 == loadedImage.getHeight()) { //significant color change or EOL
+					//compute average color
+					avgClr[0] /= pixelsInLine;
+					avgClr[1] /= pixelsInLine;
+					avgClr[2] /= pixelsInLine;
+					
+					//create new line from last terminal point to current point
+					Line strip = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR), new Color(avgClr[0],avgClr[1],avgClr[2]) );
+					strip.points.add(
+							new Point( (int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (yStart*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2) )
+						);
+					strip.points.add(
+							new Point( (int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (y*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2) )
+						);
+					linePyramid.add(strip);
+					//reset variables to new start
+					yStart = y;
+					pixelsInLine = 1;
+					startClr = clr;
+					avgClr[0] = sepRed(clr);
+					avgClr[1] = sepGreen(clr);
+					avgClr[2] = sepBlue(clr);
+				}else { //insignificant color change
+					pixelsInLine++;
+					avgClr[0] += sepRed(clr);
+					avgClr[1] += sepGreen(clr);
+					avgClr[2] += sepBlue(clr);
 				}
-				
-				newLine.points.add(new Point((int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (y1*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2)));
-				y = y1-1;
-				
-				lines.add(i++, newLine);
+			}
+			//LOOP END
+			
+			//Note: Do not try to optimize be moving variable declerations around.
+			
+			int i = 0;
+			while(i < linePyramid.size()) {
+				int j = i + 2;
+				while(j < linePyramid.size()) {
+					int ci = rgbStringToInt(linePyramid.get(i).color);
+					int cj = rgbStringToInt(linePyramid.get(j).color);
+					double dist = Math.sqrt(colorDistance(ci,cj));
+					if(Math.sqrt(dist)  < STRIP_MATCH) { //colors are similar, combine strips
+						Line si = linePyramid.get(i);
+						Line sj = linePyramid.get(j);
+						int di = si.points.get(1).y - si.points.get(0).y;
+						int dj = sj.points.get(1).y - sj.points.get(0).y;
+						//create merged line and mix colors
+						Line sm = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR), mixColors(ci,cj, (double)di/(double)(dj+di) ) );
+						sm.points.add(si.points.get(0));
+						sm.points.add(sj.points.get(1));
+						//replace the line in slot i with the merged line
+						linePyramid.set(i, sm);
+						//move next element to j
+						linePyramid.remove(j);
+					}else { //move j to next element
+						j++;	
+					}
+				}
+				i++;
+			}
+			
+			for(Line l : linePyramid) { //could be done with addAll; done like this for debug count
+				lines.add(lineCount++,l);
 			}
 		}
 		currentLine = lines.size();
-		importLines = i;
+		importLines = lineCount;
+		return importLines;
 	}
 	
+	
+	//combine color channels
+	private static int combineChannels(int[] rgb) {
+		return combineChannels(rgb[0],rgb[1],rgb[2]);
+	}
+	private static int combineChannels(int r, int g, int b) {
+		return ((r&0xFF) << 0x10) | ((g&0xFF) << 0x08) | (b&0xFF);
+	}
+	//given something that contains a hex color, return the int value of the hex color
+	private static int rgbStringToInt(String rgb) throws IllegalStateException{
+		Matcher m = Pattern.compile("[a-fA-F0-9]+").matcher(rgb);
+		m.find();
+		return Integer.parseInt(m.group(0), 16);
+	}
+	//get individual channels
+	private static int sepRed(int rgb) {
+		return (rgb&0xFF0000) >> 0x10;
+	}
+	private static int sepGreen(int rgb) {
+		return (rgb&0x00FF00) >> 0x08;
+	}
+	private static int sepBlue(int rgb) {
+		return rgb&0x0000FF;
+	}
+	
+	//interpolate colors: c = a*t + (t-1)*b
+	private static Color mixColors(Color c1, Color c2, double t) {
+		return new Color((int) (t*c1.getRed() + (1.0-t)*c2.getRed()),(int) (t*c1.getGreen() + (1.0-t)*c2.getGreen()),(int) (t*c1.getBlue() + (1.0-t)*c2.getBlue()));
+	}
+	private static Color mixColors(int c1, int c2, double t) {
+		return mixColors(new Color(c1), new Color(c2),t);
+	}
+	
+	/*
+	 * Calculates distance between 2 rgb colors in XYL colorspace
+	 */
+	private static double clrDistXYL(int c1, int c2) {
+		double[] a = RGBtoXYL(c1);
+		double[] b = RGBtoXYL(c2);
+		return Math.sqrt((a[0]*a[0]-b[0]*b[0])+(a[1]*a[1]-b[1]*b[1])+(a[2]*a[2]-b[2]*b[2]));
+	}
+	
+	/*
+	 * Given an RGB number,
+	 * convert it to XY-Lightness colorspace WHERE
+	 * X [0,1]
+	 * Y [0,1] 
+	 * L [0,1]
+	 * 
+	 * this colorspace can be used to compare how similar colors are using euclidian distance
+	 */
+	private static double[] RGBtoXYL(int c) {
+		double[] xyl = {0.0,0.0,0.0};
+		//convert rgb hex value to normalized rgb values & get which color is most and least present
+		double r = ((double)((c&0xFF0000) >> 0x10))/255.0;
+		double g = ((double)((c&0x00FF00) >> 0x8))/255.0;
+		double b = ((double)(c&0x0000FF))/255.0;
+		double M = Math.max(r, Math.max(g, b));
+		double m = Math.min(r, Math.min(g, b));
+		
+		xyl[2] = 0.5*(M + m); //Lightness
+		double divisor = 1.0 - Math.abs(2*xyl[2]-1.0);
+		double s = divisor == 0.0 ? 0.0 : (M-m) / divisor; //compute as saturation as intermediary
+		s *= (0.5-Math.abs(xyl[2]-0.5)); //C O N E I F I C A T I O N
+		
+		//compute hue as intermediary
+		double h = 0.0;
+		if(s == 0.0) 
+			h = 0.0; //hue isnt defined for grayscale; set it to 0 for sake of convention
+		else if(M == r) 
+			h = (((g-b)/(M-m))%6.0)/6.0;
+		else if(M == g) 
+			h = (((b-r)/(M-m))+2.0)/6.0;
+		else if(M == b) 
+			h = (((r-g)/(M-m))+4.0)/6.0;
+		
+		//compute x and y coords
+		xyl[0] = s*Math.cos(2*Math.PI*h);
+		xyl[1] = s*Math.sin(2*Math.PI*h);
+		return xyl;
+	}
+	
+	private Color getContrastColor(Color color) {
+		double y = (299 * color.getRed() + 587 * color.getGreen() + 114 * color.getBlue()) / 1000;
+		return y >= 128 ? Color.black : Color.white;
+	}
+	
+    public static double colorDistance(int c1, int c2) {
+        int red1 = (c1 & 0xff0000) >> 16;
+        int red2 = (c2 & 0xff0000) >> 16;
+        int rmean = (red1 + red2) >> 1;
+        int r = red1 - red2;
+        int g = ((c1 & 0xff00) >> 8) - ((c2 & 0xff00) >> 8);
+        int b = (c1 & 0xff) - (c2 & 0xff);
+        return (((512+rmean)*r*r)>>8) + 4*g*g + (((767-rmean)*b*b)>>8);
+    }
+    
 	private void repaintImage() {
 		Graphics2D g = drawnToScreenImage.createGraphics();
 		
@@ -776,18 +943,4 @@ public class JackboxDrawer {
 		g1.dispose();
 	}
 	
-	private Color getContrastColor(Color color) {
-		double y = (299 * color.getRed() + 587 * color.getGreen() + 114 * color.getBlue()) / 1000;
-		return y >= 128 ? Color.black : Color.white;
-	}
-	
-    public static double colorDistance(int c1, int c2) {
-        int red1 = (c1 & 0xff0000) >> 16;
-        int red2 = (c2 & 0xff0000) >> 16;
-        int rmean = (red1 + red2) >> 1;
-        int r = red1 - red2;
-        int g = ((c1 & 0xff00) >> 8) - ((c2 & 0xff00) >> 8);
-        int b = (c1 & 0xff) - (c2 & 0xff);
-        return (((512+rmean)*r*r)>>8) + 4*g*g + (((767-rmean)*b*b)>>8);
-    }
 }
