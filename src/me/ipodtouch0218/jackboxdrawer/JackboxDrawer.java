@@ -35,7 +35,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
+import javax.swing.Action;
 import javax.swing.ButtonGroup;
+import javax.swing.JButton;
 import javax.swing.JColorChooser;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -56,6 +58,7 @@ import javax.swing.colorchooser.AbstractColorChooserPanel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.filechooser.FileSystemView;
 
 import me.ipodtouch0218.jackboxdrawer.SupportedGames.ImageType;
 import me.ipodtouch0218.jackboxdrawer.obj.Line;
@@ -63,27 +66,25 @@ import me.ipodtouch0218.jackboxdrawer.obj.Point;
 import me.ipodtouch0218.jackboxdrawer.uielements.JPanelDnD;
 import me.ipodtouch0218.jackboxdrawer.uielements.StretchIcon;
 
-import javax.swing.JButton;
-
 public class JackboxDrawer {
 
 	public static JackboxDrawer INSTANCE;
 	
 	//Constants//
 	
-	public static final String VERSION = "1.0.2";
+	public static final String VERSION = "1.0.3";
 	public static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
 	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300;
 	private static final double 
-	VECTOR_IMPORT_SCALE_FACTOR = 3.5, 
+	VECTOR_IMPORT_SCALE_FACTOR = 2.5, 
 	COLOR_WEIGHTING = 1.0,
 	DISTANCE_WEIGHTING = -25.0,
 	STRIP_MATCH = 1.2,
 	MIN_COLOR_DIST = 35;
-	private final BufferedImage transparentTexture = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
-	{
-		Graphics2D g = transparentTexture.createGraphics();
+	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
+	static {
+		Graphics2D g = TRANSPARENT_TEXTURE.createGraphics();
 		g.setColor(new Color(244,244,244));
 		g.fillRect(0, 0, 2, 2);
 		g.setColor(new Color(224,224,224));
@@ -114,8 +115,11 @@ public class JackboxDrawer {
 		JFileChooser chooser = new JFileChooser();
 		FileNameExtensionFilter filter = new FileNameExtensionFilter("Supported Images", "png", "jpg", "jpeg");
 		chooser.setFileFilter(filter);
+		chooser.setCurrentDirectory(FileSystemView.getFileSystemView().getHomeDirectory());
+		Action details = chooser.getActionMap().get("viewTypeDetails");
+		details.actionPerformed(null);
 	    int returnVal = chooser.showOpenDialog(window);
-	    if(returnVal == JFileChooser.APPROVE_OPTION) 
+	    if (returnVal == JFileChooser.APPROVE_OPTION) 
 	    	tryImportFile(chooser.getSelectedFile());
 	}
 	
@@ -183,7 +187,7 @@ public class JackboxDrawer {
 	public void tryImportFile(File file) {
 		try {
     		BufferedImage loadedImage = ImageIO.read(file);
-    		if(loadedImage == null)
+    		if (loadedImage == null)
     			throw new IOException("read fail");
     		vectorizeImage(loadedImage);
     		sketchpad.repaint();
@@ -295,7 +299,7 @@ public class JackboxDrawer {
 	}
 	
 	//given something that contains a hex color, return the int value of the hex color
-	private static int rgbStringToInt(String rgb) throws IllegalStateException{
+	private static int rgbStringToInt(String rgb) throws IllegalStateException {
 		Matcher m = Pattern.compile("[a-fA-F0-9]+").matcher(rgb);
 		m.find();
 		return Integer.parseInt(m.group(0), 16);
@@ -322,7 +326,6 @@ public class JackboxDrawer {
 	
 	private void repaintImage() {
 		Graphics2D g = drawnToScreenImage.createGraphics();
-		
 		actualImage = new BufferedImage(240, 300, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g1 = actualImage.createGraphics();
 		
@@ -336,7 +339,7 @@ public class JackboxDrawer {
 			g1.drawRect(0, 0, CANVAS_WIDTH-1, CANVAS_HEIGHT-1);
 		} else {
 			drawPanel.setBackground(teekoPanel.getBackground());
-			g.setPaint(new TexturePaint(transparentTexture, new Rectangle(0,0,40,40)));
+			g.setPaint(new TexturePaint(TRANSPARENT_TEXTURE, new Rectangle(0,0,40,40)));
 			g.fill(new Rectangle(0,0, 240*2, 300*2));
 		}
 		
@@ -483,7 +486,7 @@ public class JackboxDrawer {
 		mnSelectGame.setMnemonic('G');
 		menuBar.add(mnSelectGame);
 		
-		ButtonGroup game = new ButtonGroup();
+		ButtonGroup gameButtons = new ButtonGroup();
 		
 		JRadioButtonMenuItem rdbtnmntmDrawful_1 = new JRadioButtonMenuItem("Drawful 1");
 		gameSelectionButtons.put(SupportedGames.DRAWFUL_1, rdbtnmntmDrawful_1);
@@ -492,7 +495,7 @@ public class JackboxDrawer {
 				changeGame(SupportedGames.DRAWFUL_1);
 			}
 		});
-		game.add(rdbtnmntmDrawful_1);
+		gameButtons.add(rdbtnmntmDrawful_1);
 		mnSelectGame.add(rdbtnmntmDrawful_1);
 		
 		JRadioButtonMenuItem rdbtnmntmDrawful_2 = new JRadioButtonMenuItem("Drawful 2");
@@ -502,7 +505,7 @@ public class JackboxDrawer {
 				changeGame(SupportedGames.DRAWFUL_2);
 			}
 		});
-		game.add(rdbtnmntmDrawful_2);
+		gameButtons.add(rdbtnmntmDrawful_2);
 		rdbtnmntmDrawful_2.setSelected(true);
 		mnSelectGame.add(rdbtnmntmDrawful_2);
 		
@@ -514,7 +517,7 @@ public class JackboxDrawer {
 			}
 		});
 		mnSelectGame.add(rdbtnmntmBidiots);
-		game.add(rdbtnmntmBidiots);
+		gameButtons.add(rdbtnmntmBidiots);
 		
 		JRadioButtonMenuItem rdbtnmntmTeeKo = new JRadioButtonMenuItem("Tee K.O.");
 		gameSelectionButtons.put(SupportedGames.TEE_KO, rdbtnmntmTeeKo);
@@ -523,7 +526,7 @@ public class JackboxDrawer {
 				changeGame(SupportedGames.TEE_KO);
 			}
 		});
-		game.add(rdbtnmntmTeeKo);
+		gameButtons.add(rdbtnmntmTeeKo);
 		mnSelectGame.add(rdbtnmntmTeeKo);
 		
 		JRadioButtonMenuItem rdbtnmntmTriviaMurderParty_1 = new JRadioButtonMenuItem("Trivia Murder Party 1");
@@ -533,7 +536,7 @@ public class JackboxDrawer {
 			}
 		});
 		mnSelectGame.add(rdbtnmntmTriviaMurderParty_1);
-		game.add(rdbtnmntmTriviaMurderParty_1);
+		gameButtons.add(rdbtnmntmTriviaMurderParty_1);
 		
 		JRadioButtonMenuItem rdbtnmntmPushTheButton = new JRadioButtonMenuItem("Push the Button");
 		gameSelectionButtons.put(SupportedGames.PUSH_THE_BUTTON, rdbtnmntmPushTheButton);
@@ -543,7 +546,7 @@ public class JackboxDrawer {
 			}
 		});
 		mnSelectGame.add(rdbtnmntmPushTheButton);
-		game.add(rdbtnmntmPushTheButton);
+		gameButtons.add(rdbtnmntmPushTheButton);
 		
 		JMenu mnSettings = new JMenu("Settings");
 		mnSettings.setMnemonic('s');
