@@ -72,7 +72,7 @@ public class JackboxDrawer {
 	
 	//Constants//
 	
-	public static final String VERSION = "1.0.3";
+	public static final String VERSION = "1.1.0";
 	public static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
 	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300;
@@ -236,7 +236,7 @@ public class JackboxDrawer {
 					avgClr[2] /= pixelsInLine;
 					
 					//create new line from last terminal point to current point
-					Line strip = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR), new Color(avgClr[0],avgClr[1],avgClr[2]) );
+					Line strip = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR+1), new Color(avgClr[0],avgClr[1],avgClr[2]) );
 					strip.points.add(
 							new Point( (int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (yStart*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2) )
 						);

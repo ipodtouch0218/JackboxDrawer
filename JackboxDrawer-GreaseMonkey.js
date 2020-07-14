@@ -19,7 +19,7 @@ console.log = function(...args) {
     //No custom code ready, most likely a vanilla subimssion. Ignore this one.
     return;
   }
-  if (args[0] == '[Blobcast Client] send') {
+  if (args[0] == '[Ecast Client] send') {
     //Perform the switch-a-roo.
     //The specifics of the code that's ran depends on the game, and that's
     //all handled from the Java-app side of things. Check the source
@@ -163,9 +163,9 @@ setInterval(function() {
     //Check for the proper version.
     if (event.data.startsWith("version")) {
         var version = event.data.split(":")[1];
-        if (version > 103) {
+        if (version > 110) {
             alert("Please update the JackboxDrawer Greasemonkey script!");
-        } else if (version < 103) {
+        } else if (version < 110) {
             alert("Please update the JackboxDrawer Java program!\nThe download can be found here: https://github.com/ipodtouch0218/JackboxDrawer/releases");
         }
         return;
