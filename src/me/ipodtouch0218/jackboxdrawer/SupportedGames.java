@@ -20,7 +20,7 @@ public enum SupportedGames {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
 			ImageIO.write(jbd.actualImage, "PNG", stream);
-			jbd.websocketServer.broadcast("var test = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "'; if (typeof (args[2].picture) !== 'undefined') { args[2].picture = test; } else { args[2].drawing = test; }");
+			jbd.websocketServer.broadcast("var test = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "'; if (typeof (data.picture) !== 'undefined') { data.picture = test; } else { data.drawing = test; }");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -29,7 +29,7 @@ public enum SupportedGames {
 	}),
 	DRAWFUL_2("Drawful 2", ImageType.VECTOR, (jbd) -> {
 		try {
-			jbd.websocketServer.broadcast("var test = " + new ObjectMapper().writeValueAsString(jbd.lines.subList(0, jbd.currentLine)) +"; if (typeof (args[2].pictureLines) !== 'undefined') { args[2].pictureLines = test; } else { args[2].drawingLines = test; }");
+			jbd.websocketServer.broadcast("var test = " + new ObjectMapper().writeValueAsString(jbd.lines.subList(0, jbd.currentLine)) +"; if (typeof (data.pictureLines) !== 'undefined') { data.pictureLines = test; } else { data.drawingLines = test; }");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -40,7 +40,7 @@ public enum SupportedGames {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
 			ImageIO.write(jbd.actualImage, "PNG", stream);
-			jbd.websocketServer.broadcast("args[2].drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
+			jbd.websocketServer.broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -50,7 +50,7 @@ public enum SupportedGames {
 	TEE_KO("Tee K.O.", ImageType.VECTOR, (jbd) -> {
 		try {
 			Color bg = jbd.teeKOBackgroundColorPicker.getColor();
-			jbd.websocketServer.broadcast("args[2].pictureLines = " + new ObjectMapper().writeValueAsString(jbd.lines.subList(0, jbd.currentLine)) + "; args[2].background = '" + String.format("#%02x%02x%02x", bg.getRed(), bg.getGreen(), bg.getBlue()) + "'");
+			jbd.websocketServer.broadcast("data.pictureLines = " + new ObjectMapper().writeValueAsString(jbd.lines.subList(0, jbd.currentLine)) + "; data.background = '" + String.format("#%02x%02x%02x", bg.getRed(), bg.getGreen(), bg.getBlue()) + "'");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -64,7 +64,7 @@ public enum SupportedGames {
 		}
 		
 		try {
-			jbd.websocketServer.broadcast("args[2].lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
+			jbd.websocketServer.broadcast("data.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
 			return true;
 		} catch (JsonProcessingException e) {
 			e.printStackTrace();
@@ -75,7 +75,7 @@ public enum SupportedGames {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
 			ImageIO.write(jbd.actualImage, "PNG", stream);
-			jbd.websocketServer.broadcast("args[2].drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
+			jbd.websocketServer.broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();

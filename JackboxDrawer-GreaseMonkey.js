@@ -2,31 +2,26 @@
 // @name         JackboxDrawer
 // @description  Allows custom brush sizes, colors, and even importing images into Jackbox's drawing games!
 // @namespace    ipodtouch0218/JackboxDrawer
-// @version      1.0.3
+// @version      1.2.0
 // @include      *://jackbox.tv/*
 // ==/UserScript==
 
-//Catch outgoing messages and replace drawing data.
+//Catch outgoing messages through stringify and replace drawing data.
 //Has to be done through eval to break through GreaseMonkey's sandboxing.
-//Luckily, every single time data is sent, a message is logged. We override console.log and wait until
-//the message "[Blobcast Client] send" is passed through, and then we can modify args[2], which contains
-//the JSON data of the message we're about to upload to jackbox's servers.
 window.eval(`
-oldConsoleLog = console.log;
-console.log = function(...args) {
-  oldConsoleLog(args.join(' ')); //Send data to the existing console.log. We don't wanna lose out on any debug info.
+oldStringify = JSON.stringify;
+JSON.stringify = function(arg) {
+  if (typeof(arg.params) == 'undefined' || arg.params == null) {
+      return oldStringify(arg);
+  }
+  data = arg.params.body;
   if (typeof(tempvar) == 'undefined' || tempvar === null) {
     //No custom code ready, most likely a vanilla subimssion. Ignore this one.
-    return;
+    return oldStringify(arg);
   }
-  if (args[0] == '[Ecast Client] send') {
-    //Perform the switch-a-roo.
-    //The specifics of the code that's ran depends on the game, and that's
-    //all handled from the Java-app side of things. Check the source
-    //code there for specifics.
-    eval(tempvar);
-    tempvar = null;
-  }
+  eval(tempvar);
+  tempvar = null;
+  return oldStringify(arg);
 }
 `);
 
@@ -163,9 +158,9 @@ setInterval(function() {
     //Check for the proper version.
     if (event.data.startsWith("version")) {
         var version = event.data.split(":")[1];
-        if (version > 110) {
+        if (version > 120) {
             alert("Please update the JackboxDrawer Greasemonkey script!");
-        } else if (version < 110) {
+        } else if (version < 120) {
             alert("Please update the JackboxDrawer Java program!\nThe download can be found here: https://github.com/ipodtouch0218/JackboxDrawer/releases");
         }
         return;

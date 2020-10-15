@@ -54,6 +54,7 @@ import javax.swing.JSpinner;
 import javax.swing.KeyStroke;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingConstants;
+import javax.swing.UIManager;
 import javax.swing.colorchooser.AbstractColorChooserPanel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -72,15 +73,15 @@ public class JackboxDrawer {
 	
 	//Constants//
 	
-	public static final String VERSION = "1.1.0";
+	public static final String VERSION = "1.2.0";
 	public static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
 	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300;
 	private static final double 
-	VECTOR_IMPORT_SCALE_FACTOR = 2.5, 
+	VECTOR_IMPORT_SCALE_FACTOR = 3.5, 
 	COLOR_WEIGHTING = 1.0,
-	DISTANCE_WEIGHTING = -25.0,
-	STRIP_MATCH = 1.2,
+	DISTANCE_WEIGHTING = 0,
+	STRIP_MATCH = 1,
 	MIN_COLOR_DIST = 35;
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	static {
@@ -190,9 +191,9 @@ public class JackboxDrawer {
     		if (loadedImage == null)
     			throw new IOException("read fail");
     		vectorizeImage(loadedImage);
-    		sketchpad.repaint();
     		JOptionPane.showMessageDialog(window, importLines + " lines drawn.", "Image Loaded", JOptionPane.INFORMATION_MESSAGE); 
     		rasterBackgroundImage = loadedImage;
+    		sketchpad.repaint();
 		} catch (Exception e1) {
 			JOptionPane.showMessageDialog(window, "File could not be read.\n", "Read Error!", JOptionPane.ERROR_MESSAGE);
 			e1.printStackTrace();
@@ -208,7 +209,7 @@ public class JackboxDrawer {
 			scaling = Image.SCALE_SMOOTH;
 		}
 		Image tmp = loadedImage.getScaledInstance((int) (CANVAS_WIDTH/VECTOR_IMPORT_SCALE_FACTOR), (int) (CANVAS_HEIGHT/VECTOR_IMPORT_SCALE_FACTOR), scaling);
-		loadedImage = new BufferedImage(tmp.getWidth(null), tmp.getHeight(null), BufferedImage.TYPE_INT_RGB);
+		loadedImage = new BufferedImage(tmp.getWidth(null), tmp.getHeight(null), BufferedImage.TYPE_INT_ARGB);
 		
 		lines = lines.subList(importLines, currentLine);
 		
@@ -236,7 +237,7 @@ public class JackboxDrawer {
 					avgClr[2] /= pixelsInLine;
 					
 					//create new line from last terminal point to current point
-					Line strip = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR+1), new Color(avgClr[0],avgClr[1],avgClr[2]) );
+					Line strip = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR+2), new Color(avgClr[0],avgClr[1],avgClr[2]));
 					strip.points.add(
 							new Point( (int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (yStart*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2) )
 						);
@@ -306,13 +307,13 @@ public class JackboxDrawer {
 	}
 	//get individual channels
 	private static int sepRed(int rgb) {
-		return (rgb&0xFF0000) >> 0x10;
+		return (rgb&0x00FF0000) >> 0x10;
 	}
 	private static int sepGreen(int rgb) {
-		return (rgb&0x00FF00) >> 0x08;
+		return (rgb&0x0000FF00) >> 0x08;
 	}
 	private static int sepBlue(int rgb) {
-		return rgb&0x0000FF;
+		return rgb&0x000000FF;
 	}
 	
 	//interpolate colors: c = a*t + (t-1)*b
@@ -385,6 +386,12 @@ public class JackboxDrawer {
     
     public static void main(String[] args) {
 		INSTANCE = new JackboxDrawer();
+		
+	    try {
+	        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+	    } catch(Exception ex) {
+	        ex.printStackTrace();
+	    }
 	}
 	
 	public JackboxDrawer() {
