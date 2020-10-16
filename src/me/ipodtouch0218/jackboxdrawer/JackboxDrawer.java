@@ -23,11 +23,14 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
@@ -37,6 +40,7 @@ import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.swing.Action;
 import javax.swing.ButtonGroup;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JColorChooser;
 import javax.swing.JFileChooser;
@@ -78,11 +82,11 @@ public class JackboxDrawer {
 	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
 	private static final int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300;
 	private static final double 
-	VECTOR_IMPORT_SCALE_FACTOR = 3.5, 
+	VECTOR_IMPORT_SCALE_FACTOR = 3, 
 	COLOR_WEIGHTING = 1.0,
 	DISTANCE_WEIGHTING = 0,
-	STRIP_MATCH = 1,
-	MIN_COLOR_DIST = 35;
+	STRIP_MATCH = 0.5,
+	MIN_COLOR_DIST = 55;
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	static {
 		Graphics2D g = TRANSPARENT_TEXTURE.createGraphics();
@@ -112,17 +116,50 @@ public class JackboxDrawer {
 	
 	//Callback Functions & Classes//
 	
-	public void importFromImage() { //Called when File > Import from Image or Ctrl + I
+	public void promptImportFromImage() { //Called when File > Import from Image or Ctrl + I
 		JFileChooser chooser = new JFileChooser();
 		FileNameExtensionFilter filter = new FileNameExtensionFilter("Supported Images", "png", "jpg", "jpeg");
 		chooser.setFileFilter(filter);
 		chooser.setCurrentDirectory(FileSystemView.getFileSystemView().getHomeDirectory());
 		Action details = chooser.getActionMap().get("viewTypeDetails");
-		details.actionPerformed(null);
+		if (details != null)
+			details.actionPerformed(null);
 	    int returnVal = chooser.showOpenDialog(window);
 	    if (returnVal == JFileChooser.APPROVE_OPTION) 
 	    	tryImportFile(chooser.getSelectedFile());
 	}
+	
+	public void promptImportFromURL() {
+		String path = JOptionPane.showInputDialog("Enter an image URL.");
+		if (path == null || path.isEmpty()) 
+			return;
+		if (path.startsWith("data:image")) {
+			//Shoot, this is base64. Oh well, handle it anyway.
+			String data = path.split(",")[1];
+			try {
+				tryImportFile(decodeToImage(data));
+			} catch (IOException e) {
+				JOptionPane.showMessageDialog(window, "URL could not be read.\n", "Read Error!", JOptionPane.ERROR_MESSAGE);
+			}
+			return;
+		}
+		tryImportFile(path);
+	}
+	
+	public BufferedImage decodeToImage(String imageString) {
+		 
+        BufferedImage image = null;
+        byte[] imageByte;
+        try {
+            imageByte = Base64.getDecoder().decode(imageString);
+            ByteArrayInputStream bis = new ByteArrayInputStream(imageByte);
+            image = ImageIO.read(bis);
+            bis.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return image;
+    }
 	
 	public void exportToGame() { //Called when File > Export to Game or Ctrl + E
 		currentGame.export(JackboxDrawer.this);
@@ -163,39 +200,50 @@ public class JackboxDrawer {
 		sketchpad.repaint();
 	}
 	
-	public void changeImportSettings() { //Called when Settings > Import Settings
-		//TODO: implement settings change window
-	}
-	
 	public void changeGame(SupportedGames game) { //Called when any of the Select Game radio buttons are pressed
 		currentGame = game;
 		teekoPanel.setVisible(currentGame == SupportedGames.TEE_KO);
 		sketchpad.repaint();
 	}
 	
-	public void michaelJordan() { //Called when Help > Get Some Help
+	//Helper Functions//
+	
+	public void openUrl(String url) {
 		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
 		    try {
-				Desktop.getDesktop().browse(new URI("https://www.youtube.com/watch?v=l60MnDJklnM"));
-			} catch (Exception e) {	
+				Desktop.getDesktop().browse(new URL(url).toURI());
+			} catch (IOException | URISyntaxException e) {
 				e.printStackTrace();
 			}
 		}
 	}
 	
-	//Helper Functions//
+	public void tryImportFile(BufferedImage loadedImage) throws IOException {
+		if (loadedImage == null)
+			throw new IOException("read fail");
+		vectorizeImage(loadedImage);
+		sketchpad.repaint();
+		rasterBackgroundImage = loadedImage;
+		JOptionPane.showMessageDialog(window, importLines + " lines drawn.", "Image Loaded", JOptionPane.INFORMATION_MESSAGE); 
+	}
 	
 	public void tryImportFile(File file) {
 		try {
     		BufferedImage loadedImage = ImageIO.read(file);
-    		if (loadedImage == null)
-    			throw new IOException("read fail");
-    		vectorizeImage(loadedImage);
-    		JOptionPane.showMessageDialog(window, importLines + " lines drawn.", "Image Loaded", JOptionPane.INFORMATION_MESSAGE); 
-    		rasterBackgroundImage = loadedImage;
-    		sketchpad.repaint();
+    		tryImportFile(loadedImage);
 		} catch (Exception e1) {
-			JOptionPane.showMessageDialog(window, "File could not be read.\n", "Read Error!", JOptionPane.ERROR_MESSAGE);
+			JOptionPane.showMessageDialog(window, "File could not be read.", "Read Error!", JOptionPane.ERROR_MESSAGE);
+			e1.printStackTrace();
+		}
+	}
+	
+	public void tryImportFile(String url) {
+		try {
+			File file = new File(new URL(url).toURI());
+    		BufferedImage loadedImage = ImageIO.read(file);
+    		tryImportFile(loadedImage);
+		} catch (Exception e1) {
+			JOptionPane.showMessageDialog(window, "URL could not be read.", "Read Error!", JOptionPane.ERROR_MESSAGE);
 			e1.printStackTrace();
 		}
 	}
@@ -237,7 +285,7 @@ public class JackboxDrawer {
 					avgClr[2] /= pixelsInLine;
 					
 					//create new line from last terminal point to current point
-					Line strip = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR+2), new Color(avgClr[0],avgClr[1],avgClr[2]));
+					Line strip = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR), new Color(avgClr[0],avgClr[1],avgClr[2]));
 					strip.points.add(
 							new Point( (int) (x*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR),(int) (yStart*VECTOR_IMPORT_SCALE_FACTOR+VECTOR_IMPORT_SCALE_FACTOR/2) )
 						);
@@ -441,23 +489,39 @@ public class JackboxDrawer {
 		
 		JMenuItem mntmImportFromImage = new JMenuItem("Import from Image");
 		mntmImportFromImage.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.CTRL_MASK));
+		mntmImportFromImage.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/import.png")));
 		mntmImportFromImage.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
-				importFromImage();
+				promptImportFromImage();
 			}
 		});
 		mnFile_1.add(mntmImportFromImage);
+		
+		JMenuItem mntmImportFromUrl = new JMenuItem("Import from URL");
+		mntmImportFromUrl.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				promptImportFromURL();
+			}
+		});
+		mntmImportFromUrl.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_U, InputEvent.CTRL_MASK));
+		mntmImportFromUrl.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/link.png")));
+		mnFile_1.add(mntmImportFromUrl);
+		
+		JSeparator separator_2_1 = new JSeparator();
+		mnFile_1.add(separator_2_1);
 		
 		JMenuItem mntmExportToGame = new JMenuItem("Export to Game");
 		mntmExportToGame.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				exportToGame();
 			}
-		});
+		});	
+		mntmExportToGame.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/export.png")));
 		mntmExportToGame.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_E, InputEvent.CTRL_MASK));
 		mnFile_1.add(mntmExportToGame);
 		
 		JMenuItem mntmClearCanvas = new JMenuItem("Clear Canvas");
+		mntmClearCanvas.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/clear.png")));
 		mntmClearCanvas.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				clearCanvas();
@@ -466,10 +530,10 @@ public class JackboxDrawer {
 		
 		mntmUndo = new JMenuItem("Undo");
 		mntmUndo.setEnabled(false);
+		mntmUndo.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/undo.png")));
 		mntmUndo.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				undoDraw();
-				
 			}
 		});
 		mntmUndo.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_MASK));
@@ -477,6 +541,7 @@ public class JackboxDrawer {
 		
 		mntmRedo = new JMenuItem("Redo");
 		mntmRedo.setEnabled(false);
+		mntmRedo.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/redo.png")));
 		mntmRedo.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				redoDraw();
@@ -555,29 +620,27 @@ public class JackboxDrawer {
 		mnSelectGame.add(rdbtnmntmPushTheButton);
 		gameButtons.add(rdbtnmntmPushTheButton);
 		
-		JMenu mnSettings = new JMenu("Settings");
-		mnSettings.setMnemonic('s');
-		menuBar.add(mnSettings);
+		JMenu mnAbout = new JMenu("About");
+		mnAbout.setMnemonic('A');
+		menuBar.add(mnAbout);
 		
-		JMenuItem mntmSettings = new JMenuItem("Import Settings");
-		mntmSettings.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				changeImportSettings();
+		JMenuItem mntmGreasyforkPage = new JMenuItem("GreasyFork Page");
+		mntmGreasyforkPage.setIcon(new ImageIcon(getClass().getResource("/img/greasyfork.png")));
+		mntmGreasyforkPage.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				openUrl("https://greasyfork.org/en/scripts/406893-jackboxdrawer");
 			}
 		});
-		mnSettings.add(mntmSettings);
+		mnAbout.add(mntmGreasyforkPage);
 		
-		JMenu mnHelp = new JMenu("Help");
-		mnHelp.setMnemonic('H');
-		menuBar.add(mnHelp);
-		
-		JMenuItem mntmMichaelJordan = new JMenuItem("Get Some Help");
-		mntmMichaelJordan.addActionListener(new ActionListener() {
+		JMenuItem mntmGithub = new JMenuItem("GitHub Page");
+		mntmGithub.setIcon(new ImageIcon(getClass().getResource("/img/github.png")));
+		mntmGithub.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				michaelJordan();
+				openUrl("https://github.com/ipodtouch0218/JackboxDrawer");
 			}
 		});
-		mnHelp.add(mntmMichaelJordan);
+		mnAbout.add(mntmGithub);
 		
 		JSeparator separator_3 = new JSeparator();
 		separator_3.setOrientation(SwingConstants.VERTICAL);
@@ -964,7 +1027,5 @@ public class JackboxDrawer {
 				});
 			}
 		}
-		
-		
 	}
 }

@@ -11,8 +11,12 @@ import java.awt.dnd.DropTargetEvent;
 import java.awt.dnd.DropTargetListener;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.util.Arrays;
 import java.util.List;
 
+import javax.imageio.ImageIO;
 import javax.swing.JPanel;
 
 import me.ipodtouch0218.jackboxdrawer.JackboxDrawer;
@@ -24,7 +28,7 @@ public class JPanelDnD extends JPanel implements DropTargetListener {
     public JPanelDnD() {
         new DropTarget(
                 this,
-                DnDConstants.ACTION_LINK,
+                DnDConstants.ACTION_COPY_OR_MOVE,
                 this,
                 true);
     }
@@ -35,7 +39,7 @@ public class JPanelDnD extends JPanel implements DropTargetListener {
 	}
 
 	@Override
-	public void dragExit(DropTargetEvent dte) {
+	public void dragExit(DropTargetEvent dtde) {
 		// TODO Auto-generated method stub
 	}
 
@@ -47,9 +51,9 @@ public class JPanelDnD extends JPanel implements DropTargetListener {
 	@SuppressWarnings("unchecked")
 	@Override
 	public void drop(DropTargetDropEvent dtde) {
-		dtde.acceptDrop(DnDConstants.ACTION_LINK);
+		dtde.acceptDrop(DnDConstants.ACTION_COPY_OR_MOVE);
 		Transferable t = dtde.getTransferable();
-        if (t.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+		if (t.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
             try {
                 Object td = t.getTransferData(DataFlavor.javaFileListFlavor);
                 if (td instanceof List) {
@@ -63,7 +67,14 @@ public class JPanelDnD extends JPanel implements DropTargetListener {
             } catch (UnsupportedFlavorException | IOException ex) {
                 ex.printStackTrace();
             }
-        }
+		} else if (t.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+			try {
+				String td = (String) t.getTransferData(DataFlavor.stringFlavor);
+				JackboxDrawer.INSTANCE.tryImportFile(ImageIO.read(new URL(td)));
+			} catch (UnsupportedFlavorException | IOException e) {
+				e.printStackTrace();
+			}
+		} 
 	}
 
 	@Override
