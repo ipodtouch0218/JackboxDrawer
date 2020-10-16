@@ -2,7 +2,7 @@
 // @name         JackboxDrawer
 // @description  Allows custom brush sizes, colors, and even importing images into Jackbox's drawing games!
 // @namespace    ipodtouch0218/JackboxDrawer
-// @version      1.2.0
+// @version      1.3.0
 // @include      *://jackbox.tv/*
 // ==/UserScript==
 
@@ -11,10 +11,16 @@
 window.eval(`
 oldStringify = JSON.stringify;
 JSON.stringify = function(arg) {
-  if (typeof(arg.params) == 'undefined' || arg.params == null) {
-      return oldStringify(arg);
+  if (typeof(ignore) == 'undefined' || ignore > 0) {
+    console.log('ignoring ' + arg.params);
+    ignore = 1;
+    ignore--;
+    return oldStringify(arg);
   }
-  data = arg.params.body;
+  if (typeof(arg.params) == 'undefined' || arg.params == null) {
+    return oldStringify(arg);
+  }
+  data = arg.params;
   if (typeof(tempvar) == 'undefined' || tempvar === null) {
     //No custom code ready, most likely a vanilla subimssion. Ignore this one.
     return oldStringify(arg);
@@ -76,7 +82,7 @@ var games = {
       document.getElementById("submitdrawing").click();
     },
     isInDrawingMode: function() {
-      return document.getElementsByClassName("Draw")[0] === null;
+      return document.getElementsByClassName("Draw")[0] != null;
     },
     getSketchpad: function() {
       return document.getElementById("fullLayer");
@@ -92,10 +98,34 @@ var games = {
     getSketchpad: function() {
       return document.getElementById("sketchpad");
     }
+  },
+  "champd_up": {
+    submitDrawing: function() {
+      if (document.getElementsByClassName("button choice-button btn btn-lg")[0].innerText == "SUBMIT") {
+        document.getElementsByClassName("button choice-button btn btn-lg")[0].click();
+      } else {
+        document.getElementById("undoButton").click();
+        alert("Submitted!");
+      }
+    },
+    submitName: function() {
+      btn = document.getElementsByClassName("button choice-button btn btn-lg")[0];
+      if (btn.getAttribute("data-action") == "name") {
+        btn.click();
+        document.getElementsByClassName("swal2-input")[0].value = "test";
+        document.getElementsByClassName("swal2-confirm swal2-styled")[0].click();
+      }
+    },
+    isInDrawingMode: function() {
+      return document.getElementsByClassName("Draw")[0] != null;
+    },
+    getSketchpad: function() {
+      return document.getElementsByClassName("sketchpad fullLayer")[0];
+    }
   }
 }
 //Keeps track of the game we're currently playing.
-var gameID = null;
+gameID = null;
 
 function updateGame(id) {
   gameID = id;
@@ -125,6 +155,8 @@ var callback = function(mutationsList, observer) {
     updateGame("push_the_button");
   } else if (document.getElementById("page-triviadeath") !== null) {
     updateGame("trivia_murder_party_1");
+  } else if (document.getElementsByClassName("worldchamps")[0] != null) {
+    updateGame("champd_up");
   }
 };
 
@@ -158,9 +190,9 @@ setInterval(function() {
     //Check for the proper version.
     if (event.data.startsWith("version")) {
         var version = event.data.split(":")[1];
-        if (version > 120) {
+        if (version > 130) {
             alert("Please update the JackboxDrawer Greasemonkey script!");
-        } else if (version < 120) {
+        } else if (version < 130) {
             alert("Please update the JackboxDrawer Java program!\nThe download can be found here: https://github.com/ipodtouch0218/JackboxDrawer/releases");
         }
         return;
@@ -168,22 +200,28 @@ setInterval(function() {
     
     //Save incoming code from the websocket in "tempvar". Needs to be eval'd to get through Greasemonkey's sandboxing.
     //We could also use window.wrappedJSObject but this is what I thought of first. Either way, potental security breach right here.
-    window.eval("var tempvar = `" + event.data + "`");
+    window.eval("var tempvar = `" + event.data.replace("SUBMITNAME;","") + "`");
     
     //Check to make sure we can actually DRAW right now.
     //If not, even attempting to submit a drawing can easily crash our webpage.
     
     var currentGame = games[gameID];
     if (typeof (currentGame) === 'undefined' || currentGame === null) {
-    	alert("Game not supported!");
+      alert("Game not supported!");
       return;
     }
     
-    
     if (!currentGame.isInDrawingMode()) {
-      alert("Cannot submit drawing: Not in drawing mode!");
+      alert("Cannot submit: Not in drawing mode!");
       window.eval("var tempvar = null;");
       return;
+    }
+    
+    if (gameID == "champd_up") {
+      if (event.data.startsWith("SUBMITNAME;")) {
+        currentGame.submitName();
+        return;
+      }
     }
     
     //Find the current sketchpad. We need it for later...
@@ -197,7 +235,12 @@ setInterval(function() {
     //as it's kept track of internally, and the game never attempts to send any data if it's blank.
     var rect = sketchpad.getBoundingClientRect();
     var mouseEvent = document.createEvent('MouseEvents');
-    
+  
+    console.log(gameID);
+    if (gameID == "champd_up") {
+      eval("ignore = 1");
+    }
+  
     mouseEvent.clientX = rect.x + rect.width / 2;
     mouseEvent.clientY = rect.y + rect.height / 2;
     mouseEvent.initEvent("mousedown", true, false);
@@ -209,6 +252,7 @@ setInterval(function() {
     sketchpad.dispatchEvent(mouseEvent);
     
     //Submit drawing and get ready to switch-a-roo.
+    
     currentGame.submitDrawing();
   };
   
