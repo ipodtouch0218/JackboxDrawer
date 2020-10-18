@@ -11,9 +11,7 @@ import java.awt.dnd.DropTargetEvent;
 import java.awt.dnd.DropTargetListener;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.List;
 
 import javax.imageio.ImageIO;
@@ -70,7 +68,7 @@ public class JPanelDnD extends JPanel implements DropTargetListener {
 		} else if (t.isDataFlavorSupported(DataFlavor.stringFlavor)) {
 			try {
 				String td = (String) t.getTransferData(DataFlavor.stringFlavor);
-				JackboxDrawer.INSTANCE.tryImportFile(ImageIO.read(new URL(td)));
+				JackboxDrawer.INSTANCE.tryImportImage(ImageIO.read(new URL(td)));
 			} catch (UnsupportedFlavorException | IOException e) {
 				e.printStackTrace();
 			}

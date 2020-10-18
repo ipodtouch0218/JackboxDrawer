@@ -3,12 +3,12 @@ package me.ipodtouch0218.jackboxdrawer.obj;
 public class PushTheButtonLine {
 
 	public PushTheButtonLine(Line line) {
-		this.thickness = line.thickness;
-		this.color = line.color;
+		this.thickness = line.getThickness();
+		this.color = line.getColor();
 		
 		StringBuilder builder = new StringBuilder();
 		for (Point p : line.points) {
-			builder.append(p.x).append(",").append(p.y).append("|");
+			builder.append(p.getX()).append(",").append(p.getY()).append("|");
 		}
 		points = builder.substring(0, builder.length()-1);
 	}

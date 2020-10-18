@@ -281,7 +281,7 @@ public class StretchIcon extends ImageIcon {
    */
   @Override
   public synchronized void paintIcon(Component c, Graphics g, int x, int y) {
-    Image image = getImage();
+	Image image = getImage();
     if (image == null) {
       return;
     }
@@ -291,7 +291,7 @@ public class StretchIcon extends ImageIcon {
 
     int w = c.getWidth() - x - insets.right;
     int h = c.getHeight() - y - insets.bottom;
-
+    
     if (proportionate) {
       int iw = image.getWidth(c);
       int ih = image.getHeight(c);

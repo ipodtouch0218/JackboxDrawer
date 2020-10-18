@@ -14,6 +14,7 @@ import java.awt.GridBagLayout;
 import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.SystemColor;
 import java.awt.TexturePaint;
 import java.awt.event.ActionEvent;
@@ -24,17 +25,19 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.awt.image.BufferedImage;
+import java.awt.image.VolatileImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.EnumMap;
 import java.util.Iterator;
-import java.util.List;
+import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -66,29 +69,31 @@ import javax.swing.event.ChangeListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.filechooser.FileSystemView;
 
+import lombok.Getter;
 import me.ipodtouch0218.jackboxdrawer.SupportedGames.ImageType;
 import me.ipodtouch0218.jackboxdrawer.obj.Line;
 import me.ipodtouch0218.jackboxdrawer.obj.Point;
 import me.ipodtouch0218.jackboxdrawer.uielements.HintTextField;
 import me.ipodtouch0218.jackboxdrawer.uielements.JPanelDnD;
 import me.ipodtouch0218.jackboxdrawer.uielements.StretchIcon;
+import me.ipodtouch0218.jackboxdrawer.util.ImageVectorizationHelper;
+import me.ipodtouch0218.jackboxdrawer.util.RandomUtils;
+import me.ipodtouch0218.jackboxdrawer.util.SizeLimitedList;
+import me.ipodtouch0218.jackboxdrawer.util.VolatileImageHelper;
 
 public class JackboxDrawer {
 
 	public static JackboxDrawer INSTANCE;
 	
-	//Constants//
-	
+	//--Constants--//
 	public static final String VERSION = "1.3.0";
-	public static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
-	private static final List<Color> TEEKO_BG_COLORS = Arrays.asList(new Color[]{new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)});
-	private static int CANVAS_WIDTH = 240, CANVAS_HEIGHT = 300;
-	private static final double 
-	VECTOR_IMPORT_SCALE_FACTOR = 3, 
-	COLOR_WEIGHTING = 1.0,
-	DISTANCE_WEIGHTING = 0,
-	STRIP_MATCH = 0.5,
-	MIN_COLOR_DIST = 55;
+	private static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
+	private static final Color[] TEEKO_BG_COLORS = {new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)};
+	private static final double VECTOR_IMPORT_SCALE_FACTOR = 3;
+	private static final double COLOR_WEIGHTING = 1,
+		DISTANCE_WEIGHTING = 0,
+		STRIP_MATCH = 0.5,
+		MIN_COLOR_DIST = 55;
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	static {
 		Graphics2D g = TRANSPARENT_TEXTURE.createGraphics();
@@ -98,31 +103,46 @@ public class JackboxDrawer {
 		g.fillRect(1, 0, 2, 1);
 		g.fillRect(0, 1, 1, 2);
 		g.dispose();
+		TRANSPARENCY = new TexturePaint(TRANSPARENT_TEXTURE, new Rectangle(0,0,40,40));
 	}
+	private static final TexturePaint TRANSPARENCY;
 	
-	//Global Variables//
+	//--Variables--//
 	
-	JFrame window;
-	JPanel teekoPanel, champdUpPanel, drawPanel, mainPanel;
-	private JSeparator sep1, sep2;
 	WebsocketServer websocketServer;
 	SupportedGames currentGame = SupportedGames.DRAWFUL_2;
-	EnumMap<SupportedGames, JRadioButtonMenuItem> gameSelectionButtons = new EnumMap<>(SupportedGames.class);
-	JColorChooser brushChooser, teeKOColorPicker;
-	private JMenuBar menuBar;
-	private JMenu menuFile, menuEdit, menuGame, menuAbout;
-	private JMenuItem mntmRedo, mntmUndo;
-	public JLabel sketchpad, lblBrushThickness, lblBrushSettings;
-	private JLabel lblShirtWarning;
-	BufferedImage drawnToScreenImage = new BufferedImage(CANVAS_WIDTH*2,CANVAS_HEIGHT*2, BufferedImage.TYPE_INT_RGB), rasterBackgroundImage, actualImage;
+	
+	//Undo and Redo History
+	private SizeLimitedList<ArrayList<Line>> undoRedoHistory = new SizeLimitedList<>(100);
+	private int currentHistoryIndex = -1;
+	
+	//Components
+	@Getter private JFrame window;
+	private JPanel teekoPanel, champdUpPanel, drawPanel;
+	
+	//Drawing vars
+	@Getter private ArrayList<Line> lines = new ArrayList<>();
 	private boolean drawing, erasing;
-	int importLines, currentLine;
-	List<Line> lines = new ArrayList<>();
+	private int importLines;
+	
+	EnumMap<SupportedGames, JRadioButtonMenuItem> gameSelectionButtons = new EnumMap<>(SupportedGames.class);
+	JColorChooser brushColorPicker, shirtBackgroundColorPicker;
+	private JMenuItem mntmRedoButton, mntmUndoButton;
+	private JLabel sketchpad;
+	private JLabel lblShirtWarning, lblContrastWarning;
+	private BufferedImage importedImage;
+	@Getter private VolatileImage canvasImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.TRANSLUCENT);
+	private VolatileImage drawnToScreenImage  = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.OPAQUE);
+	
 	HintTextField txtChampdUpName;
 	
 	//Callback Functions & Classes//
 	
-	public void promptImportFromImage() { //Called when File > Import from Image or Ctrl + I
+	
+	/**
+	 * Called when File > Import from Image or Ctrl + I
+	 */
+	public void promptImportFromImage() { 
 		JFileChooser chooser = new JFileChooser();
 		FileNameExtensionFilter filter = new FileNameExtensionFilter("Supported Images", "png", "jpg", "jpeg");
 		chooser.setFileFilter(filter);
@@ -135,6 +155,9 @@ public class JackboxDrawer {
 	    	tryImportFile(chooser.getSelectedFile());
 	}
 	
+	/**
+	 * //Called when File > Import from URL or Ctrl + U
+	 */
 	public void promptImportFromURL() {
 		String path = JOptionPane.showInputDialog("Enter an image URL.");
 		if (path == null || path.isEmpty()) 
@@ -143,7 +166,7 @@ public class JackboxDrawer {
 			//Shoot, this is base64. Oh well, handle it anyway.
 			String data = path.split(",")[1];
 			try {
-				tryImportFile(decodeToImage(data));
+				tryImportImage(decodeToImage(data));
 			} catch (IOException e) {
 				JOptionPane.showMessageDialog(window, "URL could not be read.\n", "Read Error!", JOptionPane.ERROR_MESSAGE);
 			}
@@ -153,7 +176,6 @@ public class JackboxDrawer {
 	}
 	
 	public BufferedImage decodeToImage(String imageString) {
-		 
         BufferedImage image = null;
         byte[] imageByte;
         try {
@@ -167,7 +189,13 @@ public class JackboxDrawer {
         return image;
     }
 	
-	public void exportToGame() { //Called when File > Export to Game or Ctrl + E
+	/**
+	 * Called when File > Export to Game or Ctrl + E
+	 */
+	public void exportToGame() {
+		if (drawing || erasing)
+			return;
+		
 		if (currentGame == SupportedGames.CHAMPD_UP) {
 			if (txtChampdUpName.getText().trim().isEmpty()) {
 				JOptionPane.showMessageDialog(window, "You must enter a Challenger Name!", "Export Error!", JOptionPane.ERROR_MESSAGE);
@@ -178,14 +206,14 @@ public class JackboxDrawer {
 	}
 	
 	public boolean clearCanvas() { //Called when Edit > Clear Canvas
-		if ((lines.isEmpty() || currentLine <= 0) && rasterBackgroundImage == null) {
+		if ((lines.isEmpty()) && importedImage == null) {
 			return true;
 		}
 		if (JOptionPane.showConfirmDialog(window, "Clear the entire canvas?", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-			currentLine = 0;
-			importLines = 0;
+			
 			lines.clear();
-			rasterBackgroundImage = null;
+			saveHistory();
+			
 			sketchpad.repaint();
 			return true;
 		}
@@ -193,77 +221,102 @@ public class JackboxDrawer {
 	}
 	
 	public boolean clearCanvas(int newWidth, int newHeight) {
-		if (((lines.isEmpty() || currentLine <= 0) && rasterBackgroundImage == null) || (CANVAS_WIDTH == newWidth && CANVAS_HEIGHT == newHeight)) {
-			CANVAS_WIDTH = newWidth;
-			CANVAS_HEIGHT = newHeight;
-			drawnToScreenImage = new BufferedImage(CANVAS_WIDTH*2,CANVAS_HEIGHT*2, BufferedImage.TYPE_INT_RGB);
-			StretchIcon si = new StretchIcon(drawnToScreenImage, true);
-			sketchpad.setIcon(si);
-			sketchpad.repaint();
+		if (getCanvasWidth() == newWidth && getCanvasHeight() == newHeight) {
+			//Same height + width, don't clear.
 			return true;
 		}
-		if (JOptionPane.showConfirmDialog(window, "The game you are changing to has a differnet canvas size?\nThe canvas must be cleared to continue.\nClear the entire canvas?", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-			currentLine = 0;
-			importLines = 0;
+		//Different height+width
+		if ((lines.isEmpty() && importedImage == null) ||
+			JOptionPane.showConfirmDialog(window, "The game you are changing to has a differnet canvas size.\nThe canvas must be cleared to continue.\nClear the entire canvas?", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+			
+			undoRedoHistory.clear();
+			currentHistoryIndex = -1;
+			saveHistory();
+			
 			lines.clear();
-			rasterBackgroundImage = null;
-			CANVAS_WIDTH = newWidth;
-			CANVAS_HEIGHT = newHeight;
-			drawnToScreenImage = new BufferedImage(CANVAS_WIDTH*2,CANVAS_HEIGHT*2, BufferedImage.TYPE_INT_RGB);
-			StretchIcon si = new StretchIcon(drawnToScreenImage, true);
-			sketchpad.setIcon(si);
-			sketchpad.repaint();
 			return true;
 		}
 		return false;
 	}
 	
-	public void undoDraw() { //Called when Edit >  Undo or Ctrl + Z
+	/**
+	 * Called when Edit >  Undo or Ctrl + Z
+	 */
+	@SuppressWarnings("unchecked")
+	public void undo() { 
 		if (drawing || erasing) return;
-		if (currentLine > 0 && currentLine > importLines) {
-			currentLine = Math.max(importLines, currentLine - 1);
-			mntmRedo.setEnabled(true);
-		}
-		mntmUndo.setEnabled(currentLine != 0);
+		if (currentHistoryIndex <= 0) return;
+		
+		lines = (ArrayList<Line>) undoRedoHistory.get(--currentHistoryIndex).clone();
+		
+		mntmUndoButton.setEnabled(currentHistoryIndex > 0);
+		mntmRedoButton.setEnabled(currentHistoryIndex != undoRedoHistory.size()-1);
+		
 		sketchpad.repaint();
 	}
 	
-	public void redoDraw() { //Called when Edit >  Redo or Ctrl + Y
-		if (drawing || erasing || currentLine >= lines.size()) return;
-		currentLine++;
-		if (currentLine == lines.size()) {
-			mntmRedo.setEnabled(false);
-		} else {
-			mntmRedo.setEnabled(true);
-		}
-		mntmUndo.setEnabled(true);
+	/**
+	 * Called when Edit >  Redo or Ctrl + Y
+	 */
+	@SuppressWarnings("unchecked")
+	public void redo() { 
+		if (drawing || erasing) return;
+		if (currentHistoryIndex >= undoRedoHistory.size());
+		
+		lines = (ArrayList<Line>) undoRedoHistory.get(++currentHistoryIndex).clone();
+		
+		mntmUndoButton.setEnabled(currentHistoryIndex > 0);
+		mntmRedoButton.setEnabled(currentHistoryIndex != undoRedoHistory.size()-1);
+		
 		sketchpad.repaint();
 	}
 	
-	public void changeGame(SupportedGames game) { //Called when any of the Select Game radio buttons are pressed
-		if (currentGame == game) {
+	/**
+	 * Saves the current state of the canvas to the history.
+	 */
+	@SuppressWarnings("unchecked")
+	public void saveHistory() {
+		undoRedoHistory.removeAfter(currentHistoryIndex);
+		
+		undoRedoHistory.add((ArrayList<Line>) lines.clone());
+		currentHistoryIndex = Math.min(currentHistoryIndex + 1, undoRedoHistory.getMaxSize());
+		
+		mntmUndoButton.setEnabled(currentHistoryIndex > 0);
+		mntmRedoButton.setEnabled(false);
+	}
+	
+	/**
+	 * Called when any of the Select Game radio buttons are pressed
+	 * @param newGame The new game to be set
+	 */
+	public void changeGame(SupportedGames newGame) {
+		if (currentGame == newGame) {
 			return;
 		}
-		if (game == SupportedGames.CHAMPD_UP) {
-			if (!clearCanvas(640, 640)) {
+		
+		if (currentGame.getCanvasWidth() != newGame.getCanvasWidth() || currentGame.getCanvasHeight() != newGame.getCanvasHeight()) {
+			if (!clearCanvas(newGame.getCanvasWidth(), newGame.getCanvasHeight())) {
 				gameSelectionButtons.get(currentGame).setSelected(true);
 				return;
-			}
-		} else {
-			if (!clearCanvas(240, 300)) {
-				gameSelectionButtons.get(currentGame).setSelected(true);
-				return;
+			} else {
+				currentGame = newGame;
+				canvasImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.TRANSLUCENT);
+				drawnToScreenImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.OPAQUE);
+				sketchpad.setIcon(new StretchIcon(drawnToScreenImage, true));
 			}
 		}
-		currentGame = game;
-		
-		teekoPanel.setVisible(game == SupportedGames.TEE_KO);
-		champdUpPanel.setVisible(game == SupportedGames.CHAMPD_UP);
+		currentGame = newGame;
+		teekoPanel.setVisible(newGame == SupportedGames.TEE_KO);
+		champdUpPanel.setVisible(newGame == SupportedGames.CHAMPD_UP);
 		sketchpad.repaint();
 	}
 	
 	//Helper Functions//
 	
+	/**
+	 * Opens a URL in the OS' default browser
+	 * @param url The URL to be opened
+	 */
 	public void openUrl(String url) {
 		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
 		    try {
@@ -274,44 +327,72 @@ public class JackboxDrawer {
 		}
 	}
 	
-	public void tryImportFile(BufferedImage loadedImage) throws IOException {
+	/**
+	 * Tries to import + vectorize an image
+	 * @param loadedImage Image to be vectorized
+	 * @throws IOException
+	 */
+	public void tryImportImage(BufferedImage loadedImage) throws IOException {
 		if (loadedImage == null)
 			throw new IOException("read fail");
-		vectorizeImage(loadedImage);
+		int importLines = vectorizeImage(loadedImage);
 		sketchpad.repaint();
-		rasterBackgroundImage = loadedImage;
+		importedImage = loadedImage;
 		JOptionPane.showMessageDialog(window, importLines + " lines drawn.", "Image Loaded", JOptionPane.INFORMATION_MESSAGE); 
 	}
 	
+	/**
+	 * Imports and vectorizes an image from a File
+	 * @param file File of the image to be imported
+	 */
 	public void tryImportFile(File file) {
 		try {
-    		BufferedImage loadedImage = ImageIO.read(file);
-    		tryImportFile(loadedImage);
+    		tryImportImage(ImageIO.read(file));
 		} catch (Exception e1) {
 			JOptionPane.showMessageDialog(window, "File could not be read.", "Read Error!", JOptionPane.ERROR_MESSAGE);
 			e1.printStackTrace();
 		}
 	}
 	
+	/**
+	 * Imports and vectorizes an image from URL
+	 * @param url URL of the image to be imported
+	 */
 	public void tryImportFile(String url) {
 		try {
-			File file = new File(new URL(url).toURI());
-    		BufferedImage loadedImage = ImageIO.read(file);
-    		tryImportFile(loadedImage);
+			URL urlObj = new URL(url);
+			try {
+				//see if its a file
+				tryImportImage(ImageIO.read(urlObj));
+			} catch (Exception e) {
+				URLConnection conn = urlObj.openConnection();
+				conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0");
+				tryImportImage(ImageIO.read(conn.getInputStream()));
+			}
 		} catch (Exception e1) {
 			JOptionPane.showMessageDialog(window, "URL could not be read.", "Read Error!", JOptionPane.ERROR_MESSAGE);
 			e1.printStackTrace();
 		}
 	}
 	
+	
+	// TTTTTTTTTT    OOOOO    DDDDDDD      OOOOO
+	//    TTT      OO     OO  DD     DD  OO     OO
+	//    TTT      OO     OO  DD     DD  OO     OO
+	//    TTT      OO     OO  DD     DD  OO     OO
+	//    TTT        OOOOO    DDDDDDD      OOOOO
+	//
+	// please change all of this... please
+	
 	public int vectorizeImage(BufferedImage loadedImage) {
 		
-		double sfw = (VECTOR_IMPORT_SCALE_FACTOR / 240f * CANVAS_WIDTH);
-		double sfh = (VECTOR_IMPORT_SCALE_FACTOR / 300f * CANVAS_HEIGHT);
-		Image tmp = loadedImage.getScaledInstance((int) (CANVAS_WIDTH/sfw), (int) (CANVAS_HEIGHT/sfh), Image.SCALE_SMOOTH);
-		loadedImage = new BufferedImage(tmp.getWidth(null), tmp.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+		int canvasWidth = getCanvasWidth();
+		int canvasHeight = getCanvasHeight();
 		
-		lines = lines.subList(importLines, currentLine);
+		double sfw = (VECTOR_IMPORT_SCALE_FACTOR / 240f * canvasWidth);
+		double sfh = (VECTOR_IMPORT_SCALE_FACTOR / 300f * canvasHeight);
+		Image tmp = loadedImage.getScaledInstance((int) (canvasWidth/sfw), (int) (canvasHeight/sfh), Image.SCALE_SMOOTH);
+		loadedImage = new BufferedImage(tmp.getWidth(null), tmp.getHeight(null), BufferedImage.TYPE_INT_RGB);
 		
 		Graphics2D g2d = loadedImage.createGraphics();
 		g2d.drawImage(tmp, 0, 0, null);
@@ -327,7 +408,7 @@ public class JackboxDrawer {
 			//LOOP START
 			for(int y = 0; y < loadedImage.getHeight(); y++) {
 				int clr = loadedImage.getRGB(x,y);
-				boolean match = COLOR_WEIGHTING*Math.sqrt(colorDistance(clr, startClr)) +
+				boolean match = COLOR_WEIGHTING*Math.sqrt(ImageVectorizationHelper.colorDistanceSquared(clr, startClr)) +
 								DISTANCE_WEIGHTING*(y-yStart)/loadedImage.getHeight() <
 								MIN_COLOR_DIST;
 				if(!match || y+1 == loadedImage.getHeight()) { //significant color change or EOL
@@ -337,26 +418,22 @@ public class JackboxDrawer {
 					avgClr[2] /= pixelsInLine;
 					
 					//create new line from last terminal point to current point
-					Line strip = new Line( (int) Math.ceil(Math.max(sfw, sfh)), new Color(avgClr[0],avgClr[1],avgClr[2]));
-					strip.points.add(
-							new Point( (int) (x*sfw+sfw),(int) (yStart*sfh+sfh/2) )
-						);
-					strip.points.add(
-							new Point( (int) (x*sfw+sfw),(int) (y*sfh+sfh/2) )
-						);
+					Line strip = new Line((int) Math.ceil(Math.max(sfw, sfh)+1), new Color(avgClr[0],avgClr[1],avgClr[2]));
+					strip.points.add(new Point((int) (x*sfw+sfw), (int) (yStart*sfh+sfh/2)));
+					strip.points.add(new Point((int) (x*sfw+sfw), (int) (y*sfh+sfh/2)));
 					linePyramid.add(strip);
 					//reset variables to new start
 					yStart = y;
 					pixelsInLine = 1;
 					startClr = clr;
-					avgClr[0] = sepRed(clr);
-					avgClr[1] = sepGreen(clr);
-					avgClr[2] = sepBlue(clr);
+					avgClr[0] = ImageVectorizationHelper.sepRed(clr);
+					avgClr[1] = ImageVectorizationHelper.sepGreen(clr);
+					avgClr[2] = ImageVectorizationHelper.sepBlue(clr);
 				}else { //insignificant color change
 					pixelsInLine++;
-					avgClr[0] += sepRed(clr);
-					avgClr[1] += sepGreen(clr);
-					avgClr[2] += sepBlue(clr);
+					avgClr[0] += ImageVectorizationHelper.sepRed(clr);
+					avgClr[1] += ImageVectorizationHelper.sepGreen(clr);
+					avgClr[2] += ImageVectorizationHelper.sepBlue(clr);
 				}
 			}
 			//LOOP END
@@ -367,14 +444,14 @@ public class JackboxDrawer {
 			while(i < linePyramid.size()) {
 				int j = i + 2;
 				while(j < linePyramid.size()) {
-					int ci = rgbStringToInt(linePyramid.get(i).color);
-					int cj = rgbStringToInt(linePyramid.get(j).color);
-					double dist = Math.sqrt(colorDistance(ci,cj));
-					if(Math.sqrt(dist)  < STRIP_MATCH) { //colors are similar, combine strips
+					int ci = rgbStringToInt(linePyramid.get(i).getColor());
+					int cj = rgbStringToInt(linePyramid.get(j).getColor());
+					double dist = Math.sqrt(ImageVectorizationHelper.colorDistanceSquared(ci,cj));
+					if(Math.sqrt(dist) < STRIP_MATCH) { //colors are similar, combine strips
 						Line si = linePyramid.get(i);
 						Line sj = linePyramid.get(j);
-						int di = si.points.get(1).y - si.points.get(0).y;
-						int dj = sj.points.get(1).y - sj.points.get(0).y;
+						int di = si.points.get(1).getY() - si.points.get(0).getY();
+						int dj = sj.points.get(1).getY() - sj.points.get(0).getY();
 						//create merged line and mix colors
 						Line sm = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR), mixColors(ci,cj, (double)di/(double)(dj+di) ) );
 						sm.points.add(si.points.get(0));
@@ -390,13 +467,12 @@ public class JackboxDrawer {
 				i++;
 			}
 			
-			for(Line l : linePyramid) { //could be done with addAll; done like this for debug count
-				lines.add(lineCount++,l);
-			}
+			lines.addAll(linePyramid);
+			lineCount += linePyramid.size();
 		}
-		currentLine = lines.size();
+		saveHistory();
 		importLines = lineCount;
-		return importLines;
+		return lineCount;
 	}
 	
 	//given something that contains a hex color, return the int value of the hex color
@@ -404,16 +480,6 @@ public class JackboxDrawer {
 		Matcher m = Pattern.compile("[a-fA-F0-9]+").matcher(rgb);
 		m.find();
 		return Integer.parseInt(m.group(0), 16);
-	}
-	//get individual channels
-	private static int sepRed(int rgb) {
-		return (rgb&0x00FF0000) >> 0x10;
-	}
-	private static int sepGreen(int rgb) {
-		return (rgb&0x0000FF00) >> 0x08;
-	}
-	private static int sepBlue(int rgb) {
-		return rgb&0x000000FF;
 	}
 	
 	//interpolate colors: c = a*t + (t-1)*b
@@ -424,73 +490,123 @@ public class JackboxDrawer {
 		return mixColors(new Color(c1), new Color(c2),t);
 	}
 	
-	
+	/**
+	 * Redraws the sketchpad image.
+	 */
 	private void repaintImage() {
+		int canvasWidth = getCanvasWidth();
+		int canvasHeight = getCanvasHeight();
+		
+		boolean fastdraw = drawing && !canvasImage.contentsLost() && !drawnToScreenImage.contentsLost();
+		if (!fastdraw) {
+			drawnToScreenImage = VolatileImageHelper.clearImage(drawnToScreenImage);
+		}
 		Graphics2D g = drawnToScreenImage.createGraphics();
-		actualImage = new BufferedImage(CANVAS_WIDTH, CANVAS_HEIGHT, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g1 = actualImage.createGraphics();
 		
-		if (currentGame == SupportedGames.TEE_KO) {
-			g1.setColor(teeKOColorPicker.getColor());
-			drawPanel.setBackground(g1.getColor());
-			lblShirtWarning.setVisible(!TEEKO_BG_COLORS.contains(g1.getColor()));
-			g1.fill(new Rectangle(0,0, CANVAS_WIDTH, CANVAS_HEIGHT));
-			g1.setColor(getContrastColor(g1.getColor()));
-			g1.setStroke(new BasicStroke(3f));
-			g1.drawRect(0, 0, CANVAS_WIDTH-1, CANVAS_HEIGHT-1);
-		} else {
-			drawPanel.setBackground(null);
-			g.setPaint(new TexturePaint(TRANSPARENT_TEXTURE, new Rectangle(0,0,40,40)));
-			g.fill(new Rectangle(0,0, CANVAS_WIDTH*2, CANVAS_HEIGHT*2));
-		}
-		
-		if (currentGame.getImageType() == ImageType.BITMAP && rasterBackgroundImage != null) {
-			g1.drawImage(rasterBackgroundImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, null);
-		}
-		
-		int linesDrawn = 0;
-		lines:
-		for (Line line : lines) {
-			if (linesDrawn++ >= currentLine) break lines;
-			if (linesDrawn <= importLines && currentGame.getImageType() == ImageType.BITMAP) continue lines;
-			g1.setColor(Color.decode(line.color));
-			g1.setStroke(new BasicStroke(line.thickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-			for (int i = 0; i+1 < line.points.size(); i++) {
-				Point p1 = line.points.get(i);
-				Point p2 = line.points.get(i+1);
-				g1.drawLine(p1.x, p1.y, p2.x, p2.y);
+		do {
+			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			
+			if (fastdraw) {
+				
+				Line line = lines.get(lines.size()-1);
+				Color color = Color.decode(line.getColor());
+				g.setStroke(new BasicStroke(line.getThickness(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+				for (int i = Math.max(0, line.points.size()-4); i+1 < line.points.size(); i++) {
+					Point p1 = line.points.get(i);
+					Point p2 = line.points.get(i+1);
+					g.setColor(color);
+					g.drawLine(p1.getX(), p1.getY(), p2.getX(), p2.getY());
+				}
+				
+				g.dispose();
+				return;
 			}
-		}
-		
-		g.drawImage(actualImage, 0, 0, drawnToScreenImage.getWidth(), drawnToScreenImage.getHeight(), null);
-		g.dispose();
-		g1.dispose();
+			
+			if (currentGame == SupportedGames.TEE_KO) {
+				g.setColor(shirtBackgroundColorPicker.getColor());
+				drawPanel.setBackground(g.getColor());
+				lblShirtWarning.setVisible(!arrayContains(TEEKO_BG_COLORS, g.getColor()));
+				lblContrastWarning.setVisible(RandomUtils.getContrastRatio(Color.WHITE, shirtBackgroundColorPicker.getColor()) < 2d);
+				g.fill(new Rectangle(0,0, canvasWidth, canvasHeight));
+				g.setColor(getContrastColor(g.getColor()));
+				g.setStroke(new BasicStroke(3f));
+				g.drawRect(0, 0, canvasWidth-1, canvasHeight-1);
+			} else {
+				drawPanel.setBackground(null);
+				g.setPaint(TRANSPARENCY);
+				g.fillRect(0, 0, canvasWidth, canvasHeight);
+			}
+			
+			canvasImage = VolatileImageHelper.clearImage(canvasImage);
+			if (((StretchIcon) sketchpad.getIcon()).getImage() != canvasImage) {
+				sketchpad.setIcon(new StretchIcon(drawnToScreenImage, true));
+			}
+			Graphics2D canvasG = canvasImage.createGraphics();
+
+			do {
+				canvasG.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+				
+				if (currentGame.getType() == ImageType.BITMAP && importedImage != null) {
+					canvasG.drawImage(importedImage, 0, 0, canvasWidth, canvasHeight, null);
+				}
+				
+				lines.stream()
+					.skip(currentGame.getType() == ImageType.BITMAP ? importLines : 0)
+					.forEach(line -> {
+						canvasG.setColor(Color.decode(line.getColor()));
+						canvasG.setStroke(new BasicStroke(line.getThickness(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+						for (int i = 0; i+1 < line.points.size(); i++) {
+							Point p1 = line.points.get(i);
+							Point p2 = line.points.get(i+1);
+							canvasG.drawLine(p1.getX(), p1.getY(), p2.getX(), p2.getY());
+						}
+					});
+				
+				canvasG.dispose();
+			} while (canvasImage.contentsLost());
+			
+			g.drawImage(canvasImage, 0, 0, null);
+			g.dispose();
+		} while (drawnToScreenImage.contentsLost());
+	}
+    
+	/**
+	 * Returns if an array contains a given value
+	 * @param arr The array to check
+	 * @param obj Value to check if the array contains
+	 * @return Boolean if the array contains the given value
+	 */
+	private <T> boolean arrayContains(T[] arr, T obj) {
+		return Arrays.stream(arr).anyMatch(obj::equals);
 	}
 	
+	/**
+	 * Returns black or white, whichever best contrasts the input color.
+	 * @param color Input color.
+	 * @return Either {@link Color.BLACK} or {@link Color.WHITE}
+	 */
 	private Color getContrastColor(Color color) {
 		double y = (299 * color.getRed() + 587 * color.getGreen() + 114 * color.getBlue()) / 1000;
-		return y >= 128 ? Color.black : Color.white;
+		return y >= 128 ? Color.BLACK : Color.WHITE;
+	}
+
+	public int getCanvasWidth() {
+		return currentGame.getCanvasWidth();
+	}
+	public int getCanvasHeight() {
+		return currentGame.getCanvasHeight();
 	}
 	
-    public static double colorDistance(int c1, int c2) {
-        int red1 = (c1 & 0xff0000) >> 16;
-        int red2 = (c2 & 0xff0000) >> 16;
-        int rmean = (red1 + red2) >> 1;
-        int r = red1 - red2;
-        int g = ((c1 & 0xff00) >> 8) - ((c2 & 0xff00) >> 8);
-        int b = (c1 & 0xff) - (c2 & 0xff);
-        return (((512+rmean)*r*r)>>8) + 4*g*g + (((767-rmean)*b*b)>>8);
-    }
-    
+	
     //Initialization Functions//
     
     public static void main(String[] args) {
+    	System.setProperty("sun.java2d.opengl", "true");
 	    try {
 	        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 	    } catch(Exception ex) {
 	        ex.printStackTrace();
 	    }
-    	
 		INSTANCE = new JackboxDrawer();
 	}
 	
@@ -499,12 +615,16 @@ public class JackboxDrawer {
 		websocketServer = new WebsocketServer(this);
 		websocketServer.start();
 		window.setVisible(true);
+		saveHistory();
 	}
 	
+	/**
+	 * 
+	 */
 	private void initialize() {
 		window = new JFrame();
 		window.setTitle(PROGRAM_NAME);
-		window.setBounds(100, 100, 1062, 676);
+		window.setBounds(100, 100, 1062, 689);
 		window.setMinimumSize(new Dimension(736, 612));
 		window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		GridBagLayout gridBagLayout = new GridBagLayout();
@@ -514,7 +634,7 @@ public class JackboxDrawer {
 		gridBagLayout.rowWeights = new double[]{1.0, Double.MIN_VALUE};
 		window.getContentPane().setLayout(gridBagLayout);
 		
-		mainPanel = new JPanelDnD();
+		JPanel mainPanel = new JPanelDnD();
 		GridBagConstraints gbc_mainPanel = new GridBagConstraints();
 		gbc_mainPanel.fill = GridBagConstraints.BOTH;
 		gbc_mainPanel.gridx = 0;
@@ -527,14 +647,14 @@ public class JackboxDrawer {
 		gbl_mainPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 1.0};
 		mainPanel.setLayout(gbl_mainPanel);
 		
-		menuBar = new JMenuBar();
+		JMenuBar menuBar = new JMenuBar();
 		window.setJMenuBar(menuBar);
 		
-		menuFile = new JMenu("File");
+		JMenu menuFile = new JMenu("File");
 		menuFile.setMnemonic('F');
 		menuBar.add(menuFile);
 		
-		menuEdit = new JMenu("Edit");
+		JMenu menuEdit = new JMenu("Edit");
 		menuEdit.setMnemonic('E');
 		menuBar.add(menuEdit);
 		
@@ -579,110 +699,92 @@ public class JackboxDrawer {
 			}
 		});
 		
-		mntmUndo = new JMenuItem("Undo");
-		mntmUndo.setEnabled(false);
-		mntmUndo.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/undo.png")));
-		mntmUndo.addActionListener(new ActionListener() {
+		mntmUndoButton = new JMenuItem("Undo");
+		mntmUndoButton.setEnabled(false);
+		mntmUndoButton.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/undo.png")));
+		mntmUndoButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				undoDraw();
+				undo();
 			}
 		});
-		mntmUndo.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_MASK));
-		menuEdit.add(mntmUndo);
+		mntmUndoButton.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_MASK));
+		menuEdit.add(mntmUndoButton);
 		
-		mntmRedo = new JMenuItem("Redo");
-		mntmRedo.setEnabled(false);
-		mntmRedo.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/redo.png")));
-		mntmRedo.addActionListener(new ActionListener() {
+		mntmRedoButton = new JMenuItem("Redo");
+		mntmRedoButton.setEnabled(false);
+		mntmRedoButton.setIcon(new ImageIcon(getClass().getResource("/img/teenyicons/redo.png")));
+		mntmRedoButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				redoDraw();
+				redo();
 			}
 		});
-		mntmRedo.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Y, InputEvent.CTRL_MASK));
-		menuEdit.add(mntmRedo);
+		mntmRedoButton.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Y, InputEvent.CTRL_MASK));
+		menuEdit.add(mntmRedoButton);
 		
 		JSeparator separator_2 = new JSeparator();
 		menuEdit.add(separator_2);
 		menuEdit.add(mntmClearCanvas);
 		
-		menuGame = new JMenu("Select Game");
+		JMenu menuGame = new JMenu("Select Game");
 		menuGame.setMnemonic('G');
 		menuBar.add(menuGame);
 		
 		ButtonGroup gameButtons = new ButtonGroup();
 		
+		ActionListener gameRadioButtonListener = new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				gameSelectionButtons.entrySet().stream()
+					.filter(entry -> entry.getValue().equals(e.getSource()))
+					.findAny()
+					.map(Entry::getKey)
+					.ifPresent(JackboxDrawer.this::changeGame);
+			}
+		};
+		
 		JRadioButtonMenuItem rdbtnmntmDrawful_1 = new JRadioButtonMenuItem("Drawful 1");
 		gameSelectionButtons.put(SupportedGames.DRAWFUL_1, rdbtnmntmDrawful_1);
-		rdbtnmntmDrawful_1.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				changeGame(SupportedGames.DRAWFUL_1);
-			}
-		});
+		rdbtnmntmDrawful_1.addActionListener(gameRadioButtonListener);
 		gameButtons.add(rdbtnmntmDrawful_1);
 		menuGame.add(rdbtnmntmDrawful_1);
 		
 		JRadioButtonMenuItem rdbtnmntmDrawful_2 = new JRadioButtonMenuItem("Drawful 2");
-		gameSelectionButtons.put(SupportedGames.DRAWFUL_2, rdbtnmntmDrawful_2);
-		rdbtnmntmDrawful_2.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				changeGame(SupportedGames.DRAWFUL_2);
-			}
-		});
-		gameButtons.add(rdbtnmntmDrawful_2);
 		rdbtnmntmDrawful_2.setSelected(true);
+		gameSelectionButtons.put(SupportedGames.DRAWFUL_2, rdbtnmntmDrawful_2);
+		rdbtnmntmDrawful_2.addActionListener(gameRadioButtonListener);
+		gameButtons.add(rdbtnmntmDrawful_2);
 		menuGame.add(rdbtnmntmDrawful_2);
 		
 		JRadioButtonMenuItem rdbtnmntmBidiots = new JRadioButtonMenuItem("Bidiots");
 		gameSelectionButtons.put(SupportedGames.BIDIOTS, rdbtnmntmBidiots);
-		rdbtnmntmBidiots.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				changeGame(SupportedGames.BIDIOTS);
-			}
-		});
+		rdbtnmntmBidiots.addActionListener(gameRadioButtonListener);
 		menuGame.add(rdbtnmntmBidiots);
 		gameButtons.add(rdbtnmntmBidiots);
 		
 		JRadioButtonMenuItem rdbtnmntmTeeKo = new JRadioButtonMenuItem("Tee K.O.");
 		gameSelectionButtons.put(SupportedGames.TEE_KO, rdbtnmntmTeeKo);
-		rdbtnmntmTeeKo.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				changeGame(SupportedGames.TEE_KO);
-			}
-		});
+		rdbtnmntmTeeKo.addActionListener(gameRadioButtonListener);
 		gameButtons.add(rdbtnmntmTeeKo);
 		menuGame.add(rdbtnmntmTeeKo);
 		
 		JRadioButtonMenuItem rdbtnmntmTriviaMurderParty_1 = new JRadioButtonMenuItem("Trivia Murder Party 1");
 		gameSelectionButtons.put(SupportedGames.TRIVIA_MURDER_PARTY_1, rdbtnmntmTriviaMurderParty_1);
-		rdbtnmntmTriviaMurderParty_1.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				changeGame(SupportedGames.TRIVIA_MURDER_PARTY_1);
-			}
-		});
+		rdbtnmntmTriviaMurderParty_1.addActionListener(gameRadioButtonListener);
 		menuGame.add(rdbtnmntmTriviaMurderParty_1);
 		gameButtons.add(rdbtnmntmTriviaMurderParty_1);
 		
 		JRadioButtonMenuItem rdbtnmntmPushTheButton = new JRadioButtonMenuItem("Push the Button");
 		gameSelectionButtons.put(SupportedGames.PUSH_THE_BUTTON, rdbtnmntmPushTheButton);
-		rdbtnmntmPushTheButton.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				changeGame(SupportedGames.PUSH_THE_BUTTON);
-			}
-		});
+		rdbtnmntmPushTheButton.addActionListener(gameRadioButtonListener);
 		menuGame.add(rdbtnmntmPushTheButton);
 		gameButtons.add(rdbtnmntmPushTheButton);
 		
 		JRadioButtonMenuItem rdbtnmntmChampdUp = new JRadioButtonMenuItem("Champ'd Up");
 		gameSelectionButtons.put(SupportedGames.CHAMPD_UP, rdbtnmntmChampdUp);
-		rdbtnmntmChampdUp.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				changeGame(SupportedGames.CHAMPD_UP);
-			}
-		});
+		rdbtnmntmChampdUp.addActionListener(gameRadioButtonListener);
 		gameButtons.add(rdbtnmntmChampdUp);
 		menuGame.add(rdbtnmntmChampdUp);
 		
-		menuAbout = new JMenu("About");
+		JMenu menuAbout = new JMenu("About");
 		menuAbout.setMnemonic('A');
 		menuBar.add(menuAbout);
 		
@@ -704,7 +806,7 @@ public class JackboxDrawer {
 		});
 		menuAbout.add(mntmGithub);
 		
-		sep1 = new JSeparator();
+		JSeparator sep1 = new JSeparator();
 		sep1.setOrientation(SwingConstants.VERTICAL);
 		GridBagConstraints gbc_separator_3 = new GridBagConstraints();
 		gbc_separator_3.fill = GridBagConstraints.VERTICAL;
@@ -714,7 +816,7 @@ public class JackboxDrawer {
 		gbc_separator_3.gridy = 0;
 		mainPanel.add(sep1, gbc_separator_3);
 		
-		lblBrushSettings = new JLabel("Brush Settings");
+		JLabel lblBrushSettings = new JLabel("Brush Settings");
 		GridBagConstraints gbc_lblBrushSettings = new GridBagConstraints();
 		gbc_lblBrushSettings.insets = new Insets(0, 0, 5, 0);
 		gbc_lblBrushSettings.gridwidth = 2;
@@ -733,7 +835,7 @@ public class JackboxDrawer {
 		mainPanel.add(drawPanel, gbc_drawPanel);
 		drawPanel.setLayout(new BorderLayout(0, 0));
 		
-		sep2 = new JSeparator();
+		JSeparator sep2 = new JSeparator();
 		GridBagConstraints gbc_separator_4 = new GridBagConstraints();
 		gbc_separator_4.fill = GridBagConstraints.HORIZONTAL;
 		gbc_separator_4.gridwidth = 2;
@@ -743,7 +845,7 @@ public class JackboxDrawer {
 		mainPanel.add(sep2, gbc_separator_4);
 		
 		
-		lblBrushThickness = new JLabel("Brush Thickness");
+		JLabel lblBrushThickness = new JLabel("Brush Thickness");
 		GridBagConstraints gbc_lblBrushThickness = new GridBagConstraints();
 		gbc_lblBrushThickness.anchor = GridBagConstraints.NORTH;
 		gbc_lblBrushThickness.insets = new Insets(0, 0, 5, 5);
@@ -761,12 +863,12 @@ public class JackboxDrawer {
 		gbc_thicknessSpinner.gridy = 3;
 		mainPanel.add(thicknessSpinner, gbc_thicknessSpinner);
 		
-		brushChooser = new JColorChooser();
-		brushChooser.setBackground(SystemColor.menu);
-		brushChooser.setColor(Color.black);
-		brushChooser.setPreviewPanel(new JPanel());
-		brushChooser.setChooserPanels(new AbstractColorChooserPanel[]{brushChooser.getChooserPanels()[1]});
-		Container container = ((Container) brushChooser.getChooserPanels()[0].getComponents()[0]);
+		brushColorPicker = new JColorChooser();
+		brushColorPicker.setBackground(SystemColor.menu);
+		brushColorPicker.setColor(Color.black);
+		brushColorPicker.setPreviewPanel(new JPanel());
+		brushColorPicker.setChooserPanels(new AbstractColorChooserPanel[]{brushColorPicker.getChooserPanels()[1]});
+		Container container = ((Container) brushColorPicker.getChooserPanels()[0].getComponents()[0]);
 		int spinners = 0, sliders = 0;
 		for (int i = 0; i < container.getComponentCount(); i++) {
 			Component comp = container.getComponent(i);
@@ -793,7 +895,7 @@ public class JackboxDrawer {
 		gbc_brushChooser.insets = new Insets(0, 0, 5, 0);
 		gbc_brushChooser.gridx = 2;
 		gbc_brushChooser.gridy = 1;
-		mainPanel.add(brushChooser, gbc_brushChooser);
+		mainPanel.add(brushColorPicker, gbc_brushChooser);
 		
 		sketchpad = new JLabel("") {
 			private static final long serialVersionUID = 1L;
@@ -802,9 +904,7 @@ public class JackboxDrawer {
 				super.paintComponent(g);
 			}
 		};
-		sketchpad.setBackground(SystemColor.textHighlight);
-		sketchpad.setHorizontalAlignment(SwingConstants.LEFT);
-		sketchpad.setVerticalAlignment(SwingConstants.TOP);
+		sketchpad.setHorizontalAlignment(SwingConstants.CENTER);
 		sketchpad.setIcon(new StretchIcon(drawnToScreenImage, true));
 		sketchpad.addMouseListener(new MouseAdapter() {
 			@Override
@@ -812,40 +912,30 @@ public class JackboxDrawer {
 				StretchIcon si = (StretchIcon) sketchpad.getIcon();
 				int x = e.getX() - si.getXOffset();
 				int y = e.getY() - si.getYOffset();
-				x = (int) (((double) x / (double) si.getW()) * CANVAS_WIDTH);
-				y = (int) (((double) y / (double) si.getH()) * CANVAS_HEIGHT);
+				x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
+				y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
 				
-				if (x < 0 || x >= drawnToScreenImage.getWidth() || y < 0 || y >= drawnToScreenImage.getHeight()) {
+				if (x < 0 || x >= canvasImage.getWidth() || y < 0 || y >= canvasImage.getHeight()) {
 					return;
 				}
 				
 				if (e.getButton() == MouseEvent.BUTTON1 && !erasing) {
 					drawing = true;
-					if (currentLine == -1) {
-						lines.clear();
-						currentLine = 0;
-					}
-					while (currentLine < lines.size()) {
-						int i = lines.size()-1;
-						lines.remove(i);
-					}
-					currentLine++;
+					
+					undoRedoHistory.removeAfter(currentHistoryIndex);
 					
 					int thickness = (int) thicknessSpinner.getValue();
 					
-					Line newLine = new Line(thickness, brushChooser.getColor());
+					Line newLine = new Line(thickness, brushColorPicker.getColor());
 					lines.add(newLine);
 					
 					newLine.points.add(new Point(x,y));
-					sketchpad.repaint();
 				} else if (e.getButton() == MouseEvent.BUTTON3 && !drawing) {
 					erasing = true;
 					Point point = new Point(x,y);
-					int count = 0;
 					Iterator<Line> it = lines.iterator();
 					while (it.hasNext()) {
 						Line line = it.next();
-						if (count++ < importLines) continue;
 						if (line.points.contains(point)) {
 							it.remove();
 							sketchpad.repaint();
@@ -858,24 +948,25 @@ public class JackboxDrawer {
 			public void mouseReleased(MouseEvent e) {
 				StretchIcon si = (StretchIcon) sketchpad.getIcon();
 				if (e.getButton() == MouseEvent.BUTTON1) {
+					if (lines.isEmpty()) return;
 					drawing = false;
 					int x = e.getX() - si.getXOffset();
 					int y = e.getY() - si.getYOffset();
-					x = (int) (((double) x / (double) si.getW()) * CANVAS_WIDTH);
-					y = (int) (((double) y / (double) si.getH()) * CANVAS_HEIGHT);
+					x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
+					y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
 					
-					if (x < 0 || x >= drawnToScreenImage.getWidth() || y < 0 || y >= drawnToScreenImage.getHeight()) {
+					if (x < 0 || x >= canvasImage.getWidth() || y < 0 || y >= canvasImage.getHeight()) {
 						return;
 					}
 					Line line = lines.get(lines.size()-1);
 					line.points.add(new Point(x,y));
 					
-					mntmUndo.setEnabled(true);
-					mntmRedo.setEnabled(false);
-					sketchpad.repaint();
+					saveHistory();
 				} else if (e.getButton() == MouseEvent.BUTTON3) {
 					erasing = false;
-					mntmUndo.setEnabled(true);
+					
+					if (lines.size() != undoRedoHistory.get(currentHistoryIndex).size())
+						saveHistory();
 				}
 			}
 		});
@@ -885,16 +976,14 @@ public class JackboxDrawer {
 				StretchIcon si = (StretchIcon) sketchpad.getIcon();
 				int x = e.getX() - si.getXOffset();
 				int y = e.getY() - si.getYOffset();
-				x = (int) (((double) x / (double) si.getW()) * CANVAS_WIDTH);
-				y = (int) (((double) y / (double) si.getH()) * CANVAS_HEIGHT);
+				x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
+				y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
 				
 				if (erasing) {
 					Point point = new Point(x,y);
 					Iterator<Line> it = lines.iterator();
-					int count = 0;
 					while (it.hasNext()) {
 						Line line = it.next();
-						if (count++ < importLines) continue;
 						if (line.points.contains(point)) {
 							it.remove();
 							sketchpad.repaint();
@@ -903,7 +992,7 @@ public class JackboxDrawer {
 					}
 				} else if (drawing) {
 					Line line = lines.get(lines.size()-1);
-					if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) {
+					if (x < 0 || x >= getCanvasWidth() || y < 0 || y >= getCanvasHeight()) {
 						return;
 					}
 					Point newPoint = new Point(x,y);
@@ -916,7 +1005,6 @@ public class JackboxDrawer {
 		});
 		drawPanel.add(sketchpad, BorderLayout.CENTER);
 		
-		
 		teekoPanel = new JPanel();
 		teekoPanel.setVisible(false);
 		GridBagConstraints gbc_teekoPanel = new GridBagConstraints();
@@ -927,16 +1015,16 @@ public class JackboxDrawer {
 		mainPanel.add(teekoPanel, gbc_teekoPanel);
 		GridBagLayout gbl_teekoPanel = new GridBagLayout();
 		gbl_teekoPanel.columnWidths = new int[]{0, 0, 0, 0, 0, 0, 0};
-		gbl_teekoPanel.rowHeights = new int[]{0, 0, 0, 0, 0, 0};
+		gbl_teekoPanel.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0};
 		gbl_teekoPanel.columnWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
-		gbl_teekoPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+		gbl_teekoPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
 		teekoPanel.setLayout(gbl_teekoPanel);
 		
 		JSeparator separator_1 = new JSeparator();
 		GridBagConstraints gbc_separator_1 = new GridBagConstraints();
 		gbc_separator_1.fill = GridBagConstraints.HORIZONTAL;
 		gbc_separator_1.gridwidth = 6;
-		gbc_separator_1.insets = new Insets(0, 0, 5, 5);
+		gbc_separator_1.insets = new Insets(0, 0, 5, 0);
 		gbc_separator_1.gridx = 0;
 		gbc_separator_1.gridy = 0;
 		teekoPanel.add(separator_1, gbc_separator_1);
@@ -949,26 +1037,27 @@ public class JackboxDrawer {
 		gbc_lblTeeKoBackground.gridy = 1;
 		teekoPanel.add(lblTeeKoBackground, gbc_lblTeeKoBackground);
 		
-		teeKOColorPicker = new JColorChooser();
+		shirtBackgroundColorPicker = new JColorChooser();
 		GridBagConstraints gbc_teeKOBackgroundColorPicker = new GridBagConstraints();
 		gbc_teeKOBackgroundColorPicker.gridwidth = 6;
 		gbc_teeKOBackgroundColorPicker.insets = new Insets(0, 0, 5, 0);
 		gbc_teeKOBackgroundColorPicker.gridx = 0;
 		gbc_teeKOBackgroundColorPicker.gridy = 2;
-		teekoPanel.add(teeKOColorPicker, gbc_teeKOBackgroundColorPicker);
-		teeKOColorPicker.setPreviewPanel(new JPanel());
-		teeKOColorPicker.setChooserPanels(new AbstractColorChooserPanel[]{teeKOColorPicker.getChooserPanels()[1]});
-		teeKOColorPicker.setColor(TEEKO_BG_COLORS.get(0));
+		teekoPanel.add(shirtBackgroundColorPicker, gbc_teeKOBackgroundColorPicker);
+		shirtBackgroundColorPicker.setPreviewPanel(new JPanel());
+		shirtBackgroundColorPicker.setChooserPanels(new AbstractColorChooserPanel[]{shirtBackgroundColorPicker.getChooserPanels()[1]});
+		shirtBackgroundColorPicker.setColor(TEEKO_BG_COLORS[0]);
+		
+		ActionListener teeKoButtonListener = new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				shirtBackgroundColorPicker.setColor(((Component) e.getSource()).getBackground());
+			}
+		};
 		
 		JButton btnBlue = new JButton("Blue");
-		btnBlue.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				teeKOColorPicker.setColor(btnBlue.getBackground());
-				sketchpad.repaint();
-			}
-		});
+		btnBlue.addActionListener(teeKoButtonListener);
 		btnBlue.setForeground(Color.WHITE);
-		btnBlue.setBackground(TEEKO_BG_COLORS.get(0));
+		btnBlue.setBackground(TEEKO_BG_COLORS[0]);
 		GridBagConstraints gbc_btnBlue = new GridBagConstraints();
 		gbc_btnBlue.insets = new Insets(0, 10, 5, 5);
 		gbc_btnBlue.gridx = 0;
@@ -976,14 +1065,9 @@ public class JackboxDrawer {
 		teekoPanel.add(btnBlue, gbc_btnBlue);
 		
 		JButton btnGray = new JButton("Gray");
-		btnGray.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				teeKOColorPicker.setColor(btnGray.getBackground());
-				sketchpad.repaint();
-			}
-		});
+		btnGray.addActionListener(teeKoButtonListener);
 		btnGray.setForeground(Color.WHITE);
-		btnGray.setBackground(TEEKO_BG_COLORS.get(1));
+		btnGray.setBackground(TEEKO_BG_COLORS[1]);
 		GridBagConstraints gbc_btnGray = new GridBagConstraints();
 		gbc_btnGray.insets = new Insets(0, 0, 5, 5);
 		gbc_btnGray.gridx = 1;
@@ -991,14 +1075,9 @@ public class JackboxDrawer {
 		teekoPanel.add(btnGray, gbc_btnGray);
 		
 		JButton btnBlack = new JButton("Black");
-		btnBlack.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				teeKOColorPicker.setColor(btnBlack.getBackground());
-				sketchpad.repaint();
-			}
-		});
-		btnBlack.setForeground(Color.WHITE);
-		btnBlack.setBackground(TEEKO_BG_COLORS.get(2));
+		btnBlack.addActionListener(teeKoButtonListener);
+		btnBlack.setForeground(Color.GRAY);
+		btnBlack.setBackground(TEEKO_BG_COLORS[2]);
 		GridBagConstraints gbc_btnBlack = new GridBagConstraints();
 		gbc_btnBlack.insets = new Insets(0, 0, 5, 5);
 		gbc_btnBlack.gridx = 2;
@@ -1006,14 +1085,9 @@ public class JackboxDrawer {
 		teekoPanel.add(btnBlack, gbc_btnBlack);
 		
 		JButton btnRed = new JButton("Red");
-		btnRed.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				teeKOColorPicker.setColor(btnRed.getBackground());
-				sketchpad.repaint();
-			}
-		});
-		btnRed.setForeground(Color.WHITE);
-		btnRed.setBackground(TEEKO_BG_COLORS.get(3));
+		btnRed.addActionListener(teeKoButtonListener);
+		btnRed.setForeground(Color.GRAY);
+		btnRed.setBackground(TEEKO_BG_COLORS[3]);
 		GridBagConstraints gbc_btnRed = new GridBagConstraints();
 		gbc_btnRed.insets = new Insets(0, 0, 5, 5);
 		gbc_btnRed.gridx = 3;
@@ -1021,14 +1095,9 @@ public class JackboxDrawer {
 		teekoPanel.add(btnRed, gbc_btnRed);
 		
 		JButton btnOlive = new JButton("Olive");
-		btnOlive.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				teeKOColorPicker.setColor(btnOlive.getBackground());
-				sketchpad.repaint();
-			}
-		});
+		btnOlive.addActionListener(teeKoButtonListener);
 		btnOlive.setForeground(Color.WHITE);
-		btnOlive.setBackground(TEEKO_BG_COLORS.get(4));
+		btnOlive.setBackground(TEEKO_BG_COLORS[4]);
 		GridBagConstraints gbc_btnOlive = new GridBagConstraints();
 		gbc_btnOlive.insets = new Insets(0, 0, 5, 5);
 		gbc_btnOlive.anchor = GridBagConstraints.WEST;
@@ -1040,10 +1109,21 @@ public class JackboxDrawer {
 		lblShirtWarning.setForeground(new Color(204, 0, 0));
 		lblShirtWarning.setVisible(false);
 		GridBagConstraints gbc_lblShirtWarning = new GridBagConstraints();
+		gbc_lblShirtWarning.insets = new Insets(0, 0, 5, 0);
 		gbc_lblShirtWarning.gridwidth = 6;
 		gbc_lblShirtWarning.gridx = 0;
 		gbc_lblShirtWarning.gridy = 4;
 		teekoPanel.add(lblShirtWarning, gbc_lblShirtWarning);
+		
+		lblContrastWarning = new JLabel("This background color might make the text hard to read, or even unreadable!");
+		lblContrastWarning.setForeground(new Color(204, 0, 0));
+		lblContrastWarning.setVisible(false);
+		GridBagConstraints gbc_lblThisBackgroundColor = new GridBagConstraints();
+		gbc_lblThisBackgroundColor.gridwidth = 6;
+		gbc_lblThisBackgroundColor.insets = new Insets(0, 0, 0, 5);
+		gbc_lblThisBackgroundColor.gridx = 0;
+		gbc_lblThisBackgroundColor.gridy = 5;
+		teekoPanel.add(lblContrastWarning, gbc_lblThisBackgroundColor);
 		
 		champdUpPanel = new JPanel();
 		champdUpPanel.setVisible(false);
@@ -1095,15 +1175,7 @@ public class JackboxDrawer {
 		champdUpPanel.add(txtChampdUpName, gbc_txtChampdUpName);
 		txtChampdUpName.setColumns(10);
 		
-		for (Component comp : teeKOColorPicker.getChooserPanels()[0].getComponents()) {
-			comp.addMouseMotionListener(new MouseMotionAdapter() {
-				@Override
-				public void mouseDragged(MouseEvent e) {
-					sketchpad.repaint();
-				}
-			});
-		}
-		container = ((Container) teeKOColorPicker.getChooserPanels()[0].getComponents()[0]);
+		container = ((Container) shirtBackgroundColorPicker.getChooserPanels()[0].getComponents()[0]);
 		spinners = 0;
 		sliders = 0;
 		for (int i = 0; i < container.getComponentCount(); i++) {
@@ -1111,6 +1183,7 @@ public class JackboxDrawer {
 			if (comp instanceof JSlider) {
 				if (sliders++ >= 3) {
 					container.remove(comp);
+					//Remove alpha slider
 					i--;
 					continue;
 				}
@@ -1135,14 +1208,7 @@ public class JackboxDrawer {
 			} else if (comp instanceof JLabel) {
 				container.remove(comp);
 				i--;
-			} else {
-				comp.addMouseMotionListener(new MouseMotionAdapter() {
-					@Override
-					public void mouseDragged(MouseEvent e) {
-						sketchpad.repaint();
-					}
-				});
-			}
+			} 
 		}
 	}
 }

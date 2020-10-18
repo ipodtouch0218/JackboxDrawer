@@ -11,16 +11,20 @@ import javax.imageio.ImageIO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import me.ipodtouch0218.jackboxdrawer.obj.Line;
 import me.ipodtouch0218.jackboxdrawer.obj.PushTheButtonLine;
+import me.ipodtouch0218.jackboxdrawer.util.VolatileImageHelper;
 
+@Getter @AllArgsConstructor
 public enum SupportedGames {
 	
 	//TODO CHECK
-	DRAWFUL_1("Drawful 1", ImageType.BITMAP, (jbd) -> {
+	DRAWFUL_1("Drawful 1", ImageType.BITMAP, 240, 300, (jbd) -> {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
-			ImageIO.write(jbd.actualImage, "PNG", stream);
+			ImageIO.write(VolatileImageHelper.toBufferedImage(jbd.getCanvasImage()), "PNG", stream);
 			jbd.websocketServer.broadcast("var test = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "'; if (typeof (data.body.picture) !== 'undefined') { data.body.picture = test; } else { data.body.drawing = test; }");
 			return true;
 		} catch (Exception e) {
@@ -28,9 +32,9 @@ public enum SupportedGames {
 		}
 		return false;
 	}),
-	DRAWFUL_2("Drawful 2", ImageType.VECTOR, (jbd) -> {
+	DRAWFUL_2("Drawful 2", ImageType.VECTOR, 240, 300, (jbd) -> {
 		try {
-			jbd.websocketServer.broadcast("var test = " + new ObjectMapper().writeValueAsString(jbd.lines.subList(0, jbd.currentLine)) +"; if (typeof (data.body.pictureLines) !== 'undefined') { data.body.pictureLines = test; } else { data.body.drawingLines = test; }");
+			jbd.websocketServer.broadcast("var test = " + new ObjectMapper().writeValueAsString(jbd.getLines()) +"; if (typeof (data.body.pictureLines) !== 'undefined') { data.body.pictureLines = test; } else { data.body.drawingLines = test; }");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -38,10 +42,10 @@ public enum SupportedGames {
 		return false;
 	}),
 	//TODO Check
-	BIDIOTS("Bidiots", ImageType.BITMAP, (jbd) -> {
+	BIDIOTS("Bidiots", ImageType.BITMAP, 240, 300, (jbd) -> {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
-			ImageIO.write(jbd.actualImage, "PNG", stream);
+			ImageIO.write(VolatileImageHelper.toBufferedImage(jbd.getCanvasImage()), "PNG", stream);
 			jbd.websocketServer.broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
 			return true;
 		} catch (Exception e) {
@@ -50,10 +54,10 @@ public enum SupportedGames {
 		return false;
 	}),
 	//TODO CHECK
-	TEE_KO("Tee K.O.", ImageType.VECTOR, (jbd) -> {
+	TEE_KO("Tee K.O.", ImageType.VECTOR, 240, 300, (jbd) -> {
 		try {
-			Color bg = jbd.teeKOColorPicker.getColor();
-			jbd.websocketServer.broadcast("data.pictureLines = " + new ObjectMapper().writeValueAsString(jbd.lines.subList(0, jbd.currentLine)) + "; data.background = '" + String.format("#%02x%02x%02x", bg.getRed(), bg.getGreen(), bg.getBlue()) + "'");
+			Color bg = jbd.shirtBackgroundColorPicker.getColor();
+			jbd.websocketServer.broadcast("data.pictureLines = " + new ObjectMapper().writeValueAsString(jbd.getLines()) + "; data.background = '" + String.format("#%02x%02x%02x", bg.getRed(), bg.getGreen(), bg.getBlue()) + "'");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -61,9 +65,9 @@ public enum SupportedGames {
 		return false;
 	}),
 	//TODO CHECK
-	PUSH_THE_BUTTON("Push the Button", ImageType.VECTOR, (jbd) -> {
+	PUSH_THE_BUTTON("Push the Button", ImageType.VECTOR, 240, 300, (jbd) -> {
 		ArrayList<PushTheButtonLine> list = new ArrayList<>();
-		for (Line lines : jbd.lines.subList(0, jbd.currentLine)) {
+		for (Line lines : jbd.getLines()) {
 			list.add(new PushTheButtonLine(lines));
 		}
 		
@@ -76,10 +80,10 @@ public enum SupportedGames {
 		return false;
 	}),
 	//TODO CHECK
-	TRIVIA_MURDER_PARTY_1("Trivia Murder Party 1", ImageType.BITMAP, (jbd) -> {
+	TRIVIA_MURDER_PARTY_1("Trivia Murder Party 1", ImageType.BITMAP, 240, 300, (jbd) -> {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
-			ImageIO.write(jbd.actualImage, "PNG", stream);
+			ImageIO.write(VolatileImageHelper.toBufferedImage(jbd.getCanvasImage()), "PNG", stream);
 			jbd.websocketServer.broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
 			return true;
 		} catch (Exception e) {
@@ -87,9 +91,9 @@ public enum SupportedGames {
 		}
 		return false;
 	}),
-	CHAMPD_UP("Champ'd Up", ImageType.VECTOR, (jbd) -> {
+	CHAMPD_UP("Champ'd Up", ImageType.VECTOR, 640, 640, (jbd) -> {
 		ArrayList<PushTheButtonLine> list = new ArrayList<>();
-		for (Line lines : jbd.lines.subList(0, jbd.currentLine)) {
+		for (Line lines : jbd.getLines()) {
 			list.add(new PushTheButtonLine(lines));
 		}
 		
@@ -111,18 +115,10 @@ public enum SupportedGames {
 	}),
 	;
 
-	private String prettyName;
+	private String name;
 	private ImageType type;
+	private int canvasWidth, canvasHeight;
 	private Function<JackboxDrawer,Boolean> exportConsumer;
-	
-	SupportedGames(String id, ImageType type, Function<JackboxDrawer, Boolean> exportConsumer) {
-		this.prettyName = id;
-		this.type = type;
-		this.exportConsumer = exportConsumer;
-	}
-	
-	public ImageType getImageType() { return type; }
-	public String getName() { return prettyName; }
 	
 	public boolean export(JackboxDrawer jbd) {
 		return exportConsumer.apply(jbd);

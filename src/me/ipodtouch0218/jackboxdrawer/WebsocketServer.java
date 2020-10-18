@@ -40,7 +40,7 @@ public class WebsocketServer extends WebSocketServer {
 			if (previous == drawer.currentGame) {
 				return;
 			}
-			JOptionPane.showMessageDialog(drawer.window, "Selected game updated to " + drawer.currentGame.getName(), "Selected Game Updated", JOptionPane.INFORMATION_MESSAGE);
+			JOptionPane.showMessageDialog(drawer.getWindow(), "Selected game updated to " + drawer.currentGame.getName(), "Selected Game Updated", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
 	}
