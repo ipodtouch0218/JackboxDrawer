@@ -12,7 +12,7 @@ public class Line {
 
 	public Line(int thickness, Color color) {
 		this.thickness = thickness;
-		this.color = String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+		setColor(color);
 	}
 	
 	public final ArrayList<Point> points = new ArrayList<>();
@@ -21,6 +21,10 @@ public class Line {
 	
 	public Point[] getPoints() {
 		return points.toArray(new Point[]{});
+	}
+	
+	public void setColor(Color color) {
+		this.color = String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
 	}
 	
 //	@JsonIgnore

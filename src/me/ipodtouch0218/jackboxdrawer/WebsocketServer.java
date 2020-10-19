@@ -32,15 +32,15 @@ public class WebsocketServer extends WebSocketServer {
 	@Override
 	public void onMessage(WebSocket socket, String message) {
 		if (message.startsWith("updategame")) {
-			SupportedGames previous = drawer.currentGame;
+			SupportedGames previous = drawer.getCurrentGame();
 			drawer.changeGame(SupportedGames.valueOf(message.split(":")[1].toUpperCase()));
-			drawer.gameSelectionButtons.forEach((game,button) -> {
-				button.setSelected(game == drawer.currentGame);
+			drawer.getGameSelectionButtons().forEach((game,button) -> {
+				button.setSelected(game == drawer.getCurrentGame());
 			});
-			if (previous == drawer.currentGame) {
+			if (previous == drawer.getCurrentGame()) {
 				return;
 			}
-			JOptionPane.showMessageDialog(drawer.getWindow(), "Selected game updated to " + drawer.currentGame.getName(), "Selected Game Updated", JOptionPane.INFORMATION_MESSAGE);
+			JOptionPane.showMessageDialog(drawer.getWindow(), "Selected game updated to " + drawer.getCurrentGame().getName(), "Selected Game Updated", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
 	}

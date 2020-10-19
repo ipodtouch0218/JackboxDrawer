@@ -11,7 +11,6 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
@@ -38,8 +37,6 @@ import java.util.Base64;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 import javax.swing.Action;
@@ -70,13 +67,13 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.filechooser.FileSystemView;
 
 import lombok.Getter;
+import lombok.Setter;
 import me.ipodtouch0218.jackboxdrawer.SupportedGames.ImageType;
 import me.ipodtouch0218.jackboxdrawer.obj.Line;
 import me.ipodtouch0218.jackboxdrawer.obj.Point;
 import me.ipodtouch0218.jackboxdrawer.uielements.HintTextField;
 import me.ipodtouch0218.jackboxdrawer.uielements.JPanelDnD;
 import me.ipodtouch0218.jackboxdrawer.uielements.StretchIcon;
-import me.ipodtouch0218.jackboxdrawer.util.ImageVectorizationHelper;
 import me.ipodtouch0218.jackboxdrawer.util.RandomUtils;
 import me.ipodtouch0218.jackboxdrawer.util.SizeLimitedList;
 import me.ipodtouch0218.jackboxdrawer.util.VolatileImageHelper;
@@ -89,11 +86,10 @@ public class JackboxDrawer {
 	public static final String VERSION = "1.3.0";
 	private static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final Color[] TEEKO_BG_COLORS = {new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)};
-	private static final double VECTOR_IMPORT_SCALE_FACTOR = 3;
-	private static final double COLOR_WEIGHTING = 1,
-		DISTANCE_WEIGHTING = 0,
-		STRIP_MATCH = 0.5,
-		MIN_COLOR_DIST = 55;
+//	private static final double COLOR_WEIGHTING = 1,
+//		DISTANCE_WEIGHTING = 0,
+//		STRIP_MATCH = 0.5,
+//		MIN_COLOR_DIST = 55;
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	static {
 		Graphics2D g = TRANSPARENT_TEXTURE.createGraphics();
@@ -109,8 +105,8 @@ public class JackboxDrawer {
 	
 	//--Variables--//
 	
-	WebsocketServer websocketServer;
-	SupportedGames currentGame = SupportedGames.DRAWFUL_2;
+	@Getter private WebsocketServer websocketServer;
+	@Getter private SupportedGames currentGame = SupportedGames.DRAWFUL_2;
 	
 	//Undo and Redo History
 	private SizeLimitedList<ArrayList<Line>> undoRedoHistory = new SizeLimitedList<>(100);
@@ -121,16 +117,17 @@ public class JackboxDrawer {
 	private JPanel teekoPanel, champdUpPanel, drawPanel;
 	
 	//Drawing vars
-	@Getter private ArrayList<Line> lines = new ArrayList<>();
+	@Getter @Setter private ArrayList<Line> lines = new ArrayList<>();
 	private boolean drawing, erasing;
 	private int importLines;
 	
-	EnumMap<SupportedGames, JRadioButtonMenuItem> gameSelectionButtons = new EnumMap<>(SupportedGames.class);
-	JColorChooser brushColorPicker, shirtBackgroundColorPicker;
+	@Getter private EnumMap<SupportedGames, JRadioButtonMenuItem> gameSelectionButtons = new EnumMap<>(SupportedGames.class);
+	@Getter private JColorChooser shirtBackgroundColorPicker;
+	private JColorChooser brushColorPicker;
 	private JMenuItem mntmRedoButton, mntmUndoButton;
-	private JLabel sketchpad;
+	@Getter private JLabel sketchpad;
 	private JLabel lblShirtWarning, lblContrastWarning;
-	private BufferedImage importedImage;
+	@Setter private BufferedImage importedImage;
 	@Getter private VolatileImage canvasImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.TRANSLUCENT);
 	private VolatileImage drawnToScreenImage  = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.OPAQUE);
 	
@@ -335,10 +332,8 @@ public class JackboxDrawer {
 	public void tryImportImage(BufferedImage loadedImage) throws IOException {
 		if (loadedImage == null)
 			throw new IOException("read fail");
-		int importLines = vectorizeImage(loadedImage);
-		sketchpad.repaint();
-		importedImage = loadedImage;
-		JOptionPane.showMessageDialog(window, importLines + " lines drawn.", "Image Loaded", JOptionPane.INFORMATION_MESSAGE); 
+		
+		new ImportSettings(loadedImage);
 	}
 	
 	/**
@@ -375,14 +370,13 @@ public class JackboxDrawer {
 		}
 	}
 	
+	/*
+	private static final double VECTOR_IMPORT_SCALE_FACTOR = 3,
+		COLOR_WEIGHTING = 1,
+		DISTANCE_WEIGHTING = 0,
+		STRIP_MATCH = 0.5,
+		MIN_COLOR_DIST = 55;
 	
-	// TTTTTTTTTT    OOOOO    DDDDDDD      OOOOO
-	//    TTT      OO     OO  DD     DD  OO     OO
-	//    TTT      OO     OO  DD     DD  OO     OO
-	//    TTT      OO     OO  DD     DD  OO     OO
-	//    TTT        OOOOO    DDDDDDD      OOOOO
-	//
-	// please change all of this... please
 	
 	public int vectorizeImage(BufferedImage loadedImage) {
 		
@@ -481,6 +475,7 @@ public class JackboxDrawer {
 		m.find();
 		return Integer.parseInt(m.group(0), 16);
 	}
+	*/
 	
 	//interpolate colors: c = a*t + (t-1)*b
 	private static Color mixColors(Color c1, Color c2, double t) {
@@ -1115,7 +1110,7 @@ public class JackboxDrawer {
 		gbc_lblShirtWarning.gridy = 4;
 		teekoPanel.add(lblShirtWarning, gbc_lblShirtWarning);
 		
-		lblContrastWarning = new JLabel("This background color might make the text hard to read, or even unreadable!");
+		lblContrastWarning = new JLabel("This background color might make the caption hard to read, or even unreadable!");
 		lblContrastWarning.setForeground(new Color(204, 0, 0));
 		lblContrastWarning.setVisible(false);
 		GridBagConstraints gbc_lblThisBackgroundColor = new GridBagConstraints();

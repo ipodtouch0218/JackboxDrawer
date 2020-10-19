@@ -25,7 +25,7 @@ public enum SupportedGames {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
 			ImageIO.write(VolatileImageHelper.toBufferedImage(jbd.getCanvasImage()), "PNG", stream);
-			jbd.websocketServer.broadcast("var test = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "'; if (typeof (data.body.picture) !== 'undefined') { data.body.picture = test; } else { data.body.drawing = test; }");
+			jbd.getWebsocketServer().broadcast("var test = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "'; if (typeof (data.body.picture) !== 'undefined') { data.body.picture = test; } else { data.body.drawing = test; }");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -34,7 +34,7 @@ public enum SupportedGames {
 	}),
 	DRAWFUL_2("Drawful 2", ImageType.VECTOR, 240, 300, (jbd) -> {
 		try {
-			jbd.websocketServer.broadcast("var test = " + new ObjectMapper().writeValueAsString(jbd.getLines()) +"; if (typeof (data.body.pictureLines) !== 'undefined') { data.body.pictureLines = test; } else { data.body.drawingLines = test; }");
+			jbd.getWebsocketServer().broadcast("var test = " + new ObjectMapper().writeValueAsString(jbd.getLines()) +"; if (typeof (data.body.pictureLines) !== 'undefined') { data.body.pictureLines = test; } else { data.body.drawingLines = test; }");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -46,7 +46,7 @@ public enum SupportedGames {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
 			ImageIO.write(VolatileImageHelper.toBufferedImage(jbd.getCanvasImage()), "PNG", stream);
-			jbd.websocketServer.broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
+			jbd.getWebsocketServer().broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -56,8 +56,8 @@ public enum SupportedGames {
 	//TODO CHECK
 	TEE_KO("Tee K.O.", ImageType.VECTOR, 240, 300, (jbd) -> {
 		try {
-			Color bg = jbd.shirtBackgroundColorPicker.getColor();
-			jbd.websocketServer.broadcast("data.pictureLines = " + new ObjectMapper().writeValueAsString(jbd.getLines()) + "; data.background = '" + String.format("#%02x%02x%02x", bg.getRed(), bg.getGreen(), bg.getBlue()) + "'");
+			Color bg = jbd.getShirtBackgroundColorPicker().getColor();
+			jbd.getWebsocketServer().broadcast("data.pictureLines = " + new ObjectMapper().writeValueAsString(jbd.getLines()) + "; data.background = '" + String.format("#%02x%02x%02x", bg.getRed(), bg.getGreen(), bg.getBlue()) + "'");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -72,7 +72,7 @@ public enum SupportedGames {
 		}
 		
 		try {
-			jbd.websocketServer.broadcast("data.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
+			jbd.getWebsocketServer().broadcast("data.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
 			return true;
 		} catch (JsonProcessingException e) {
 			e.printStackTrace();
@@ -84,7 +84,7 @@ public enum SupportedGames {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
 			ImageIO.write(VolatileImageHelper.toBufferedImage(jbd.getCanvasImage()), "PNG", stream);
-			jbd.websocketServer.broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
+			jbd.getWebsocketServer().broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -101,12 +101,11 @@ public enum SupportedGames {
 			if (!jbd.txtChampdUpName.getText().isEmpty()) {
 				String out = jbd.txtChampdUpName.getText();
 				out = out.trim().replaceAll("['\"]", "\\$0");
-				jbd.websocketServer.broadcast("SUBMITNAME;data.val = '" + out + "'");
+				jbd.getWebsocketServer().broadcast("SUBMITNAME;data.val = '" + out + "'");
 				Thread.sleep(1000);
 			}
 			
-			
-			jbd.websocketServer.broadcast("data.val.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
+			jbd.getWebsocketServer().broadcast("data.val.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
