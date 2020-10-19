@@ -11,9 +11,9 @@ import me.ipodtouch0218.jackboxdrawer.JackboxDrawer;
 import me.ipodtouch0218.jackboxdrawer.obj.Line;
 import me.ipodtouch0218.jackboxdrawer.obj.Point;
 
-public class ImageVectorizationHelper {
+public class ImageVectorizer {
 
-	private ImageVectorizationHelper() {}
+	private ImageVectorizer() {}
 	
 	public static double colorDistanceSquared(int c1, int c2) {
 		//https://en.wikipedia.org/wiki/Color_difference#sRGB

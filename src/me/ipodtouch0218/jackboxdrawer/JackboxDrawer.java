@@ -83,13 +83,9 @@ public class JackboxDrawer {
 	public static JackboxDrawer INSTANCE;
 	
 	//--Constants--//
-	public static final String VERSION = "1.3.0";
+	public static final String VERSION = "1.3.2";
 	private static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final Color[] TEEKO_BG_COLORS = {new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)};
-//	private static final double COLOR_WEIGHTING = 1,
-//		DISTANCE_WEIGHTING = 0,
-//		STRIP_MATCH = 0.5,
-//		MIN_COLOR_DIST = 55;
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
 	static {
 		Graphics2D g = TRANSPARENT_TEXTURE.createGraphics();
@@ -173,17 +169,17 @@ public class JackboxDrawer {
 	}
 	
 	public BufferedImage decodeToImage(String imageString) {
-        BufferedImage image = null;
-        byte[] imageByte;
-        try {
-            imageByte = Base64.getDecoder().decode(imageString);
+		BufferedImage image = null;
+		byte[] imageByte;
+		try {
+			imageByte = Base64.getDecoder().decode(imageString);
             ByteArrayInputStream bis = new ByteArrayInputStream(imageByte);
             image = ImageIO.read(bis);
             bis.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return image;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return image;
     }
 	
 	/**

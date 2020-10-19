@@ -26,7 +26,7 @@ import javax.swing.event.ChangeListener;
 
 import me.ipodtouch0218.jackboxdrawer.SupportedGames.ImageType;
 import me.ipodtouch0218.jackboxdrawer.obj.Line;
-import me.ipodtouch0218.jackboxdrawer.util.ImageVectorizationHelper;
+import me.ipodtouch0218.jackboxdrawer.util.ImageVectorizer;
 
 public class ImportSettings extends JDialog {
 
@@ -79,7 +79,7 @@ public class ImportSettings extends JDialog {
 			sliderColorDistance.setValue(215);
 			sliderColorDistance.addChangeListener(new ChangeListener() {
 				public void stateChanged(ChangeEvent arg0) {
-					ArrayList<Line> lines = ImageVectorizationHelper.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
+					ArrayList<Line> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
 					drawer.setLines(lines);
 					drawer.getSketchpad().repaint();
 					updateLinesLabel(lines.size());
@@ -109,7 +109,7 @@ public class ImportSettings extends JDialog {
 			sliderResolution.setMaximum(7);
 			sliderResolution.addChangeListener(new ChangeListener() {
 				public void stateChanged(ChangeEvent arg0) {
-					ArrayList<Line> lines = ImageVectorizationHelper.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
+					ArrayList<Line> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
 					drawer.setLines(lines);
 					drawer.getSketchpad().repaint();
 					updateLinesLabel(lines.size());
@@ -142,7 +142,7 @@ public class ImportSettings extends JDialog {
 			sliderAlpha.setMaximum(256);
 			sliderAlpha.addChangeListener(new ChangeListener() {
 				public void stateChanged(ChangeEvent arg0) {
-					ArrayList<Line> lines = ImageVectorizationHelper.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
+					ArrayList<Line> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
 					drawer.setLines(lines);
 					drawer.getSketchpad().repaint();
 					updateLinesLabel(lines.size());
@@ -227,7 +227,7 @@ public class ImportSettings extends JDialog {
 			}
 		});
 		
-		ArrayList<Line> lines = ImageVectorizationHelper.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
+		ArrayList<Line> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
 		drawer.setLines(lines);
 		drawer.getSketchpad().repaint();
 		updateLinesLabel(lines.size());

@@ -2,7 +2,7 @@
 // @name         JackboxDrawer
 // @description  Allows custom brush sizes, colors, and even importing images into Jackbox's drawing games!
 // @namespace    ipodtouch0218/JackboxDrawer
-// @version      1.3.1
+// @version      1.3.2
 // @include      *://jackbox.tv/*
 // ==/UserScript==
 
@@ -190,9 +190,9 @@ setInterval(function() {
     //Check for the proper version.
     if (event.data.startsWith("version")) {
         var version = event.data.split(":")[1];
-        if (version > 131) {
+        if (version > 132) {
             alert("Please update the JackboxDrawer Greasemonkey script!");
-        } else if (version < 131) {
+        } else if (version < 132) {
             alert("Please update the JackboxDrawer Java program!\nThe download can be found here: https://github.com/ipodtouch0218/JackboxDrawer/releases");
         }
         return;
