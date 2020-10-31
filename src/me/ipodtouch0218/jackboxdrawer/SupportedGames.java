@@ -102,7 +102,7 @@ public enum SupportedGames {
 				String out = jbd.txtChampdUpName.getText();
 				out = out.trim().replaceAll("['\"]", "\\$0");
 				jbd.getWebsocketServer().broadcast("SUBMITNAME;data.val = '" + out + "'");
-				Thread.sleep(1000);
+				Thread.sleep(3000);
 			}
 			
 			jbd.getWebsocketServer().broadcast("data.val.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));

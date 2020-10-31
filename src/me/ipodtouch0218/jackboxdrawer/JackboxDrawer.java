@@ -83,7 +83,7 @@ public class JackboxDrawer {
 	public static JackboxDrawer INSTANCE;
 	
 	//--Constants--//
-	public static final String VERSION = "1.3.2";
+	public static final String VERSION = "1.3.3";
 	private static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final Color[] TEEKO_BG_COLORS = {new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)};
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
@@ -471,7 +471,6 @@ public class JackboxDrawer {
 		m.find();
 		return Integer.parseInt(m.group(0), 16);
 	}
-	*/
 	
 	//interpolate colors: c = a*t + (t-1)*b
 	private static Color mixColors(Color c1, Color c2, double t) {
@@ -480,6 +479,7 @@ public class JackboxDrawer {
 	private static Color mixColors(int c1, int c2, double t) {
 		return mixColors(new Color(c1), new Color(c2),t);
 	}
+	*/
 	
 	/**
 	 * Redraws the sketchpad image.
@@ -501,7 +501,7 @@ public class JackboxDrawer {
 				
 				Line line = lines.get(lines.size()-1);
 				Color color = Color.decode(line.getColor());
-				g.setStroke(new BasicStroke(line.getThickness(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+				g.setStroke(new BasicStroke((currentGame == SupportedGames.CHAMPD_UP ? 3 : 1) * line.getThickness(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 				for (int i = Math.max(0, line.points.size()-4); i+1 < line.points.size(); i++) {
 					Point p1 = line.points.get(i);
 					Point p2 = line.points.get(i+1);
@@ -545,7 +545,7 @@ public class JackboxDrawer {
 					.skip(currentGame.getType() == ImageType.BITMAP ? importLines : 0)
 					.forEach(line -> {
 						canvasG.setColor(Color.decode(line.getColor()));
-						canvasG.setStroke(new BasicStroke(line.getThickness(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+						canvasG.setStroke(new BasicStroke((currentGame == SupportedGames.CHAMPD_UP ? 3 : 1) * line.getThickness(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 						for (int i = 0; i+1 < line.points.size(); i++) {
 							Point p1 = line.points.get(i);
 							Point p2 = line.points.get(i+1);
