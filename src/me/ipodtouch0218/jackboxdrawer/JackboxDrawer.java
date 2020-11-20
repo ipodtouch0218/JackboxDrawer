@@ -83,7 +83,7 @@ public class JackboxDrawer {
 	public static JackboxDrawer INSTANCE;
 	
 	//--Constants--//
-	public static final String VERSION = "1.3.3";
+	public static final String VERSION = "1.4.0";
 	private static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final Color[] TEEKO_BG_COLORS = {new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)};
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
@@ -189,12 +189,6 @@ public class JackboxDrawer {
 		if (drawing || erasing)
 			return;
 		
-		if (currentGame == SupportedGames.CHAMPD_UP) {
-			if (txtChampdUpName.getText().trim().isEmpty()) {
-				JOptionPane.showMessageDialog(window, "You must enter a Challenger Name!", "Export Error!", JOptionPane.ERROR_MESSAGE);
-				return;
-			}
-		}
 		currentGame.export(JackboxDrawer.this);
 	}
 	
@@ -501,7 +495,7 @@ public class JackboxDrawer {
 				
 				Line line = lines.get(lines.size()-1);
 				Color color = Color.decode(line.getColor());
-				g.setStroke(new BasicStroke((currentGame == SupportedGames.CHAMPD_UP ? 3 : 1) * line.getThickness(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+				g.setStroke(new BasicStroke(Math.max(1, line.getThickness() + (currentGame == SupportedGames.CHAMPD_UP ? 4 : 0)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 				for (int i = Math.max(0, line.points.size()-4); i+1 < line.points.size(); i++) {
 					Point p1 = line.points.get(i);
 					Point p2 = line.points.get(i+1);
@@ -545,7 +539,7 @@ public class JackboxDrawer {
 					.skip(currentGame.getType() == ImageType.BITMAP ? importLines : 0)
 					.forEach(line -> {
 						canvasG.setColor(Color.decode(line.getColor()));
-						canvasG.setStroke(new BasicStroke((currentGame == SupportedGames.CHAMPD_UP ? 3 : 1) * line.getThickness(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+						canvasG.setStroke(new BasicStroke(Math.max(1, line.getThickness() + (currentGame == SupportedGames.CHAMPD_UP ? 4 : 0)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 						for (int i = 0; i+1 < line.points.size(); i++) {
 							Point p1 = line.points.get(i);
 							Point p2 = line.points.get(i+1);
@@ -1134,7 +1128,7 @@ public class JackboxDrawer {
 		JSeparator separator = new JSeparator();
 		GridBagConstraints gbc_separator = new GridBagConstraints();
 		gbc_separator.fill = GridBagConstraints.HORIZONTAL;
-		gbc_separator.gridwidth = 2;
+		gbc_separator.gridwidth = 3;
 		gbc_separator.insets = new Insets(0, 0, 5, 5);
 		gbc_separator.gridx = 0;
 		gbc_separator.gridy = 0;
@@ -1143,7 +1137,7 @@ public class JackboxDrawer {
 		JLabel lblChampdUpName = new JLabel("Champ'd Up");
 		GridBagConstraints gbc_lblChampdUpName = new GridBagConstraints();
 		gbc_lblChampdUpName.gridwidth = 3;
-		gbc_lblChampdUpName.insets = new Insets(0, 0, 5, 5);
+		gbc_lblChampdUpName.insets = new Insets(0, 0, 5, 0);
 		gbc_lblChampdUpName.gridx = 0;
 		gbc_lblChampdUpName.gridy = 1;
 		champdUpPanel.add(lblChampdUpName, gbc_lblChampdUpName);
@@ -1165,6 +1159,22 @@ public class JackboxDrawer {
 		gbc_txtChampdUpName.gridy = 2;
 		champdUpPanel.add(txtChampdUpName, gbc_txtChampdUpName);
 		txtChampdUpName.setColumns(10);
+		
+		JButton btnSubmitName = new JButton("Submit Name");
+		btnSubmitName.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				if (!txtChampdUpName.getText().isEmpty()) {
+					String out = txtChampdUpName.getText();
+					out = out.trim().replaceAll("['\"]", "\\$0");
+					getWebsocketServer().broadcast("SUBMITNAME;data.val = '" + out + "'");
+				}
+			}
+		});
+		GridBagConstraints gbc_btnSubmitName = new GridBagConstraints();
+		gbc_btnSubmitName.insets = new Insets(0, 0, 0, 5);
+		gbc_btnSubmitName.gridx = 2;
+		gbc_btnSubmitName.gridy = 2;
+		champdUpPanel.add(btnSubmitName, gbc_btnSubmitName);
 		
 		container = ((Container) shirtBackgroundColorPicker.getChooserPanels()[0].getComponents()[0]);
 		spinners = 0;

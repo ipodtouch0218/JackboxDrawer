@@ -25,6 +25,10 @@ public class PushTheButtonLine {
 		return thickness; 
 	}
 	
+	public void setThickness(int thick) {
+		thickness = thick;
+	}
+	
 	public String getColor() {
 		return color;
 	}

@@ -96,15 +96,9 @@ public enum SupportedGames {
 		for (Line lines : jbd.getLines()) {
 			list.add(new PushTheButtonLine(lines));
 		}
+		list.forEach(ptbl -> ptbl.setThickness(Math.max(1,ptbl.getThickness()-4)));
 		
-		try {
-			if (!jbd.txtChampdUpName.getText().isEmpty()) {
-				String out = jbd.txtChampdUpName.getText();
-				out = out.trim().replaceAll("['\"]", "\\$0");
-				jbd.getWebsocketServer().broadcast("SUBMITNAME;data.val = '" + out + "'");
-				Thread.sleep(3000);
-			}
-			
+		try {			
 			jbd.getWebsocketServer().broadcast("data.val.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
 			return true;
 		} catch (Exception e) {
