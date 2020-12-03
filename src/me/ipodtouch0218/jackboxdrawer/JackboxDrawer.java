@@ -5,13 +5,14 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Desktop;
 import java.awt.Dimension;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.SystemColor;
@@ -23,6 +24,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
+import java.awt.geom.Line2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.VolatileImage;
 import java.io.ByteArrayInputStream;
@@ -56,6 +58,7 @@ import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JSeparator;
 import javax.swing.JSlider;
 import javax.swing.JSpinner;
+import javax.swing.JSplitPane;
 import javax.swing.KeyStroke;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingConstants;
@@ -69,9 +72,10 @@ import javax.swing.filechooser.FileSystemView;
 import lombok.Getter;
 import lombok.Setter;
 import me.ipodtouch0218.jackboxdrawer.SupportedGames.ImageType;
-import me.ipodtouch0218.jackboxdrawer.obj.Line;
-import me.ipodtouch0218.jackboxdrawer.obj.Point;
+import me.ipodtouch0218.jackboxdrawer.obj.JackboxLine;
+import me.ipodtouch0218.jackboxdrawer.obj.LinePoint;
 import me.ipodtouch0218.jackboxdrawer.uielements.HintTextField;
+import me.ipodtouch0218.jackboxdrawer.uielements.ImportWindow;
 import me.ipodtouch0218.jackboxdrawer.uielements.JPanelDnD;
 import me.ipodtouch0218.jackboxdrawer.uielements.StretchIcon;
 import me.ipodtouch0218.jackboxdrawer.util.RandomUtils;
@@ -83,7 +87,7 @@ public class JackboxDrawer {
 	public static JackboxDrawer INSTANCE;
 	
 	//--Constants--//
-	public static final String VERSION = "1.4.0";
+	public static final String VERSION = "1.4.1";
 	private static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final Color[] TEEKO_BG_COLORS = {new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)};
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
@@ -105,32 +109,32 @@ public class JackboxDrawer {
 	@Getter private SupportedGames currentGame = SupportedGames.DRAWFUL_2;
 	
 	//Undo and Redo History
-	private SizeLimitedList<ArrayList<Line>> undoRedoHistory = new SizeLimitedList<>(100);
+	private SizeLimitedList<ArrayList<JackboxLine>> undoRedoHistory = new SizeLimitedList<>(100);
 	private int currentHistoryIndex = -1;
 	
 	//Components
 	@Getter private JFrame window;
 	private JPanel teekoPanel, champdUpPanel, drawPanel;
-	
-	//Drawing vars
-	@Getter @Setter private ArrayList<Line> lines = new ArrayList<>();
-	private boolean drawing, erasing;
-	private int importLines;
-	
 	@Getter private EnumMap<SupportedGames, JRadioButtonMenuItem> gameSelectionButtons = new EnumMap<>(SupportedGames.class);
 	@Getter private JColorChooser shirtBackgroundColorPicker;
 	private JColorChooser brushColorPicker;
 	private JMenuItem mntmRedoButton, mntmUndoButton;
 	@Getter private JLabel sketchpad;
 	private JLabel lblShirtWarning, lblContrastWarning;
-	@Setter private BufferedImage importedImage;
+	private HintTextField txtChampdUpName;
+	
+	//Drawing vars
+	@Getter @Setter private ArrayList<JackboxLine> lines = new ArrayList<>();
+	private boolean drawing, erasing;
+	@Getter @Setter private int importLines;
+	private Point previousMousePos;
+	
+	//Images
+	@Getter @Setter private BufferedImage importedImage;
 	@Getter private VolatileImage canvasImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.TRANSLUCENT);
 	private VolatileImage drawnToScreenImage  = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.OPAQUE);
 	
-	HintTextField txtChampdUpName;
-	
-	//Callback Functions & Classes//
-	
+	//--Callback Functions & Classes--//
 	
 	/**
 	 * Called when File > Import from Image or Ctrl + I
@@ -140,16 +144,19 @@ public class JackboxDrawer {
 		FileNameExtensionFilter filter = new FileNameExtensionFilter("Supported Images", "png", "jpg", "jpeg");
 		chooser.setFileFilter(filter);
 		chooser.setCurrentDirectory(FileSystemView.getFileSystemView().getHomeDirectory());
+		
+		//Default to "details" view, at least in windows.
 		Action details = chooser.getActionMap().get("viewTypeDetails");
 		if (details != null)
 			details.actionPerformed(null);
+		
 	    int returnVal = chooser.showOpenDialog(window);
 	    if (returnVal == JFileChooser.APPROVE_OPTION) 
 	    	tryImportFile(chooser.getSelectedFile());
 	}
 	
 	/**
-	 * //Called when File > Import from URL or Ctrl + U
+	 * Called when File > Import from URL or Ctrl + U
 	 */
 	public void promptImportFromURL() {
 		String path = JOptionPane.showInputDialog("Enter an image URL.");
@@ -168,6 +175,11 @@ public class JackboxDrawer {
 		tryImportFile(path);
 	}
 	
+	/**
+	 * Decode base64 string to image (in case someone copies a base64 string as an image from google or something...)
+	 * @param imageString Base64 String to deocde
+	 * @return Image (or null) of the given string
+	 */
 	public BufferedImage decodeToImage(String imageString) {
 		BufferedImage image = null;
 		byte[] imageByte;
@@ -184,6 +196,7 @@ public class JackboxDrawer {
 	
 	/**
 	 * Called when File > Export to Game or Ctrl + E
+	 * Sends the current drawing to the GreaseMonkey extension
 	 */
 	public void exportToGame() {
 		if (drawing || erasing)
@@ -192,21 +205,33 @@ public class JackboxDrawer {
 		currentGame.export(JackboxDrawer.this);
 	}
 	
-	public boolean clearCanvas() { //Called when Edit > Clear Canvas
+	/**
+	 * Clears the entire canvas, without resizing
+	 * Called when Edit > Clear Canvas
+	 * @return If the canvas was cleared.
+	 */
+	public boolean clearCanvas() {
 		if ((lines.isEmpty()) && importedImage == null) {
 			return true;
 		}
-		if (JOptionPane.showConfirmDialog(window, "Clear the entire canvas?", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+		if (JOptionPane.showConfirmDialog(window, "Clear the entire canvas?\nThis action is irreversable.", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
 			
 			lines.clear();
-			saveHistory();
+			clearHistory();
 			
-			sketchpad.repaint();
+			repaintImage(true);
 			return true;
 		}
 		return false;
 	}
 	
+	/**
+	 * Clears the entire canvas AND sets a new canvas size.
+	 * Called when current game changes.
+	 * @param newWidth The new width of the canvas, in pixels.
+	 * @param newHeight The new height of the canvas, in pixels.
+	 * @return If the canvas was cleared & resized.
+	 */
 	public boolean clearCanvas(int newWidth, int newHeight) {
 		if (getCanvasWidth() == newWidth && getCanvasHeight() == newHeight) {
 			//Same height + width, don't clear.
@@ -214,48 +239,57 @@ public class JackboxDrawer {
 		}
 		//Different height+width
 		if ((lines.isEmpty() && importedImage == null) ||
-			JOptionPane.showConfirmDialog(window, "The game you are changing to has a differnet canvas size.\nThe canvas must be cleared to continue.\nClear the entire canvas?", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-			
-			undoRedoHistory.clear();
-			currentHistoryIndex = -1;
-			saveHistory();
+			JOptionPane.showConfirmDialog(window, "The game you are changing to has a differnet canvas size.\nThe canvas must be cleared to continue.\nThis action is irreversable.\nClear the entire canvas?", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
 			
 			lines.clear();
+			clearHistory();
+			
 			return true;
 		}
 		return false;
 	}
 	
 	/**
+	 * Clears undo/redo history.
+	 */
+	public void clearHistory() {
+		undoRedoHistory.clear();
+		currentHistoryIndex = -1;
+		saveHistory();
+	}
+	
+	/**
 	 * Called when Edit >  Undo or Ctrl + Z
+	 * Undoes a single edit.
 	 */
 	@SuppressWarnings("unchecked")
 	public void undo() { 
 		if (drawing || erasing) return;
 		if (currentHistoryIndex <= 0) return;
 		
-		lines = (ArrayList<Line>) undoRedoHistory.get(--currentHistoryIndex).clone();
+		lines = (ArrayList<JackboxLine>) undoRedoHistory.get(--currentHistoryIndex).clone();
 		
 		mntmUndoButton.setEnabled(currentHistoryIndex > 0);
 		mntmRedoButton.setEnabled(currentHistoryIndex != undoRedoHistory.size()-1);
 		
-		sketchpad.repaint();
+		repaintImage(true);
 	}
 	
 	/**
 	 * Called when Edit >  Redo or Ctrl + Y
+	 * Redos a single edit.
 	 */
 	@SuppressWarnings("unchecked")
 	public void redo() { 
 		if (drawing || erasing) return;
 		if (currentHistoryIndex >= undoRedoHistory.size());
 		
-		lines = (ArrayList<Line>) undoRedoHistory.get(++currentHistoryIndex).clone();
+		lines = (ArrayList<JackboxLine>) undoRedoHistory.get(++currentHistoryIndex).clone();
 		
 		mntmUndoButton.setEnabled(currentHistoryIndex > 0);
 		mntmRedoButton.setEnabled(currentHistoryIndex != undoRedoHistory.size()-1);
 		
-		sketchpad.repaint();
+		repaintImage(true);
 	}
 	
 	/**
@@ -265,7 +299,7 @@ public class JackboxDrawer {
 	public void saveHistory() {
 		undoRedoHistory.removeAfter(currentHistoryIndex);
 		
-		undoRedoHistory.add((ArrayList<Line>) lines.clone());
+		undoRedoHistory.add((ArrayList<JackboxLine>) lines.clone());
 		currentHistoryIndex = Math.min(currentHistoryIndex + 1, undoRedoHistory.getMaxSize());
 		
 		mntmUndoButton.setEnabled(currentHistoryIndex > 0);
@@ -295,7 +329,7 @@ public class JackboxDrawer {
 		currentGame = newGame;
 		teekoPanel.setVisible(newGame == SupportedGames.TEE_KO);
 		champdUpPanel.setVisible(newGame == SupportedGames.CHAMPD_UP);
-		sketchpad.repaint();
+		repaintImage(true);
 	}
 	
 	//Helper Functions//
@@ -317,13 +351,13 @@ public class JackboxDrawer {
 	/**
 	 * Tries to import + vectorize an image
 	 * @param loadedImage Image to be vectorized
-	 * @throws IOException
+	 * @throws IOException if the loaded image is null.
 	 */
 	public void tryImportImage(BufferedImage loadedImage) throws IOException {
 		if (loadedImage == null)
 			throw new IOException("read fail");
 		
-		new ImportSettings(loadedImage);
+		new ImportWindow(loadedImage);
 	}
 	
 	/**
@@ -360,129 +394,15 @@ public class JackboxDrawer {
 		}
 	}
 	
-	/*
-	private static final double VECTOR_IMPORT_SCALE_FACTOR = 3,
-		COLOR_WEIGHTING = 1,
-		DISTANCE_WEIGHTING = 0,
-		STRIP_MATCH = 0.5,
-		MIN_COLOR_DIST = 55;
-	
-	
-	public int vectorizeImage(BufferedImage loadedImage) {
-		
-		int canvasWidth = getCanvasWidth();
-		int canvasHeight = getCanvasHeight();
-		
-		double sfw = (VECTOR_IMPORT_SCALE_FACTOR / 240f * canvasWidth);
-		double sfh = (VECTOR_IMPORT_SCALE_FACTOR / 300f * canvasHeight);
-		Image tmp = loadedImage.getScaledInstance((int) (canvasWidth/sfw), (int) (canvasHeight/sfh), Image.SCALE_SMOOTH);
-		loadedImage = new BufferedImage(tmp.getWidth(null), tmp.getHeight(null), BufferedImage.TYPE_INT_RGB);
-		
-		Graphics2D g2d = loadedImage.createGraphics();
-		g2d.drawImage(tmp, 0, 0, null);
-		g2d.dispose();
-		
-		int lineCount = 0;
-		for (int x = 0; x < loadedImage.getWidth(); x++) {
-			ArrayList<Line> linePyramid = new ArrayList<Line>();
-			int yStart = 0;
-			int pixelsInLine = 0;
-			int startClr = loadedImage.getRGB(x, 0);
-			int[] avgClr = {0,0,0};
-			//LOOP START
-			for(int y = 0; y < loadedImage.getHeight(); y++) {
-				int clr = loadedImage.getRGB(x,y);
-				boolean match = COLOR_WEIGHTING*Math.sqrt(ImageVectorizationHelper.colorDistanceSquared(clr, startClr)) +
-								DISTANCE_WEIGHTING*(y-yStart)/loadedImage.getHeight() <
-								MIN_COLOR_DIST;
-				if(!match || y+1 == loadedImage.getHeight()) { //significant color change or EOL
-					//compute average color
-					avgClr[0] /= pixelsInLine;
-					avgClr[1] /= pixelsInLine;
-					avgClr[2] /= pixelsInLine;
-					
-					//create new line from last terminal point to current point
-					Line strip = new Line((int) Math.ceil(Math.max(sfw, sfh)+1), new Color(avgClr[0],avgClr[1],avgClr[2]));
-					strip.points.add(new Point((int) (x*sfw+sfw), (int) (yStart*sfh+sfh/2)));
-					strip.points.add(new Point((int) (x*sfw+sfw), (int) (y*sfh+sfh/2)));
-					linePyramid.add(strip);
-					//reset variables to new start
-					yStart = y;
-					pixelsInLine = 1;
-					startClr = clr;
-					avgClr[0] = ImageVectorizationHelper.sepRed(clr);
-					avgClr[1] = ImageVectorizationHelper.sepGreen(clr);
-					avgClr[2] = ImageVectorizationHelper.sepBlue(clr);
-				}else { //insignificant color change
-					pixelsInLine++;
-					avgClr[0] += ImageVectorizationHelper.sepRed(clr);
-					avgClr[1] += ImageVectorizationHelper.sepGreen(clr);
-					avgClr[2] += ImageVectorizationHelper.sepBlue(clr);
-				}
-			}
-			//LOOP END
-			
-			//Note: Do not try to optimize be moving variable declerations around.
-			
-			int i = 0;
-			while(i < linePyramid.size()) {
-				int j = i + 2;
-				while(j < linePyramid.size()) {
-					int ci = rgbStringToInt(linePyramid.get(i).getColor());
-					int cj = rgbStringToInt(linePyramid.get(j).getColor());
-					double dist = Math.sqrt(ImageVectorizationHelper.colorDistanceSquared(ci,cj));
-					if(Math.sqrt(dist) < STRIP_MATCH) { //colors are similar, combine strips
-						Line si = linePyramid.get(i);
-						Line sj = linePyramid.get(j);
-						int di = si.points.get(1).getY() - si.points.get(0).getY();
-						int dj = sj.points.get(1).getY() - sj.points.get(0).getY();
-						//create merged line and mix colors
-						Line sm = new Line( (int) Math.ceil(VECTOR_IMPORT_SCALE_FACTOR), mixColors(ci,cj, (double)di/(double)(dj+di) ) );
-						sm.points.add(si.points.get(0));
-						sm.points.add(sj.points.get(1));
-						//replace the line in slot i with the merged line
-						linePyramid.set(i, sm);
-						//move next element to j
-						linePyramid.remove(j);
-					}else { //move j to next element
-						j++;	
-					}
-				}
-				i++;
-			}
-			
-			lines.addAll(linePyramid);
-			lineCount += linePyramid.size();
-		}
-		saveHistory();
-		importLines = lineCount;
-		return lineCount;
-	}
-	
-	//given something that contains a hex color, return the int value of the hex color
-	private static int rgbStringToInt(String rgb) throws IllegalStateException {
-		Matcher m = Pattern.compile("[a-fA-F0-9]+").matcher(rgb);
-		m.find();
-		return Integer.parseInt(m.group(0), 16);
-	}
-	
-	//interpolate colors: c = a*t + (t-1)*b
-	private static Color mixColors(Color c1, Color c2, double t) {
-		return new Color((int) (t*c1.getRed() + (1.0-t)*c2.getRed()),(int) (t*c1.getGreen() + (1.0-t)*c2.getGreen()),(int) (t*c1.getBlue() + (1.0-t)*c2.getBlue()));
-	}
-	private static Color mixColors(int c1, int c2, double t) {
-		return mixColors(new Color(c1), new Color(c2),t);
-	}
-	*/
-	
 	/**
 	 * Redraws the sketchpad image.
+	 * @param fullRepaint If fast-draw optimizations should be ignored.
 	 */
-	private void repaintImage() {
+	public void repaintImage(boolean fullRepaint) {
 		int canvasWidth = getCanvasWidth();
 		int canvasHeight = getCanvasHeight();
 		
-		boolean fastdraw = drawing && !canvasImage.contentsLost() && !drawnToScreenImage.contentsLost();
+		boolean fastdraw = drawing && !canvasImage.contentsLost() && !drawnToScreenImage.contentsLost() && !fullRepaint;
 		if (!fastdraw) {
 			drawnToScreenImage = VolatileImageHelper.clearImage(drawnToScreenImage);
 		}
@@ -493,17 +413,18 @@ public class JackboxDrawer {
 			
 			if (fastdraw) {
 				
-				Line line = lines.get(lines.size()-1);
+				JackboxLine line = lines.get(lines.size()-1);
 				Color color = Color.decode(line.getColor());
 				g.setStroke(new BasicStroke(Math.max(1, line.getThickness() + (currentGame == SupportedGames.CHAMPD_UP ? 4 : 0)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 				for (int i = Math.max(0, line.points.size()-4); i+1 < line.points.size(); i++) {
-					Point p1 = line.points.get(i);
-					Point p2 = line.points.get(i+1);
+					LinePoint p1 = line.points.get(i);
+					LinePoint p2 = line.points.get(i+1);
 					g.setColor(color);
 					g.drawLine(p1.getX(), p1.getY(), p2.getX(), p2.getY());
 				}
 				
 				g.dispose();
+				sketchpad.repaint();
 				return;
 			}
 			
@@ -541,8 +462,8 @@ public class JackboxDrawer {
 						canvasG.setColor(Color.decode(line.getColor()));
 						canvasG.setStroke(new BasicStroke(Math.max(1, line.getThickness() + (currentGame == SupportedGames.CHAMPD_UP ? 4 : 0)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
 						for (int i = 0; i+1 < line.points.size(); i++) {
-							Point p1 = line.points.get(i);
-							Point p2 = line.points.get(i+1);
+							LinePoint p1 = line.points.get(i);
+							LinePoint p2 = line.points.get(i+1);
 							canvasG.drawLine(p1.getX(), p1.getY(), p2.getX(), p2.getY());
 						}
 					});
@@ -553,6 +474,8 @@ public class JackboxDrawer {
 			g.drawImage(canvasImage, 0, 0, null);
 			g.dispose();
 		} while (drawnToScreenImage.contentsLost());
+		
+		sketchpad.repaint();
 	}
     
 	/**
@@ -575,9 +498,17 @@ public class JackboxDrawer {
 		return y >= 128 ? Color.BLACK : Color.WHITE;
 	}
 
+	/**
+	 * Returns the current canvas width, according to the current game.
+	 * @return The current canvas width
+	 */
 	public int getCanvasWidth() {
 		return currentGame.getCanvasWidth();
 	}
+	/**
+	 * Returns the current canvas height, according to the current game.
+	 * @return The current canvas height
+	 */
 	public int getCanvasHeight() {
 		return currentGame.getCanvasHeight();
 	}
@@ -600,14 +531,20 @@ public class JackboxDrawer {
 		websocketServer = new WebsocketServer(this);
 		websocketServer.start();
 		window.setVisible(true);
+		drawPanel.grabFocus();
 		saveHistory();
+		repaintImage(true);
 	}
 	
 	/**
-	 * 
+	 * Initializes all components & the main window.
 	 */
 	private void initialize() {
 		window = new JFrame();
+		try {
+			window.setIconImage(ImageIO.read(getClass().getResource("/img/jbd-smol.png")));
+		} catch (IOException e1) {
+		}
 		window.setTitle(PROGRAM_NAME);
 		window.setBounds(100, 100, 1062, 689);
 		window.setMinimumSize(new Dimension(736, 612));
@@ -626,10 +563,10 @@ public class JackboxDrawer {
 		gbc_mainPanel.gridy = 0;
 		window.getContentPane().add(mainPanel, gbc_mainPanel);
 		GridBagLayout gbl_mainPanel = new GridBagLayout();
-		gbl_mainPanel.columnWidths = new int[]{0, 0, 0, 0};
-		gbl_mainPanel.rowHeights = new int[] {0, 0, 0, 0, 0};
-		gbl_mainPanel.columnWeights = new double[]{1.0, 0.0, 0.0, Double.MIN_VALUE};
-		gbl_mainPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 1.0};
+		gbl_mainPanel.columnWidths = new int[] {0};
+		gbl_mainPanel.rowHeights = new int[] {0};
+		gbl_mainPanel.columnWeights = new double[]{1.0};
+		gbl_mainPanel.rowWeights = new double[]{1.0};
 		mainPanel.setLayout(gbl_mainPanel);
 		
 		JMenuBar menuBar = new JMenuBar();
@@ -791,213 +728,162 @@ public class JackboxDrawer {
 		});
 		menuAbout.add(mntmGithub);
 		
-		JSeparator sep1 = new JSeparator();
-		sep1.setOrientation(SwingConstants.VERTICAL);
-		GridBagConstraints gbc_separator_3 = new GridBagConstraints();
-		gbc_separator_3.fill = GridBagConstraints.VERTICAL;
-		gbc_separator_3.gridheight = 5;
-		gbc_separator_3.insets = new Insets(0, 0, 0, 5);
-		gbc_separator_3.gridx = 1;
-		gbc_separator_3.gridy = 0;
-		mainPanel.add(sep1, gbc_separator_3);
+		drawPanel = new JPanel();
+		drawPanel.setLayout(new BorderLayout(0, 0));
+		drawPanel.setMinimumSize(new Dimension(100,50));
+		
+		JPanel settingsPanel = new JPanel();
+		GridBagLayout gbl_settingsPanel = new GridBagLayout();
+		gbl_settingsPanel.columnWidths = new int[] {0, 0};
+		gbl_settingsPanel.rowHeights = new int[]{0, 0, 0, 0, 0, 0};
+		gbl_settingsPanel.columnWeights = new double[]{0.0, 4.9E-324};
+		gbl_settingsPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 1.0, Double.MIN_VALUE};
+		settingsPanel.setLayout(gbl_settingsPanel);
+		
+		JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, drawPanel, settingsPanel);
+		splitPane.setContinuousLayout(true);
+		splitPane.setResizeWeight(1.0);
+		GridBagConstraints gbc_splitPane = new GridBagConstraints();
+		gbc_splitPane.insets = new Insets(0, 0, 0, 5);
+		gbc_splitPane.fill = GridBagConstraints.BOTH;
+		gbc_splitPane.gridx = 0;
+		gbc_splitPane.gridy = 0;
+		mainPanel.add(splitPane, gbc_splitPane);
 		
 		JLabel lblBrushSettings = new JLabel("Brush Settings");
 		GridBagConstraints gbc_lblBrushSettings = new GridBagConstraints();
-		gbc_lblBrushSettings.insets = new Insets(0, 0, 5, 0);
 		gbc_lblBrushSettings.gridwidth = 2;
-		gbc_lblBrushSettings.gridx = 2;
+		gbc_lblBrushSettings.insets = new Insets(0, 10, 5, 0);
+		gbc_lblBrushSettings.gridx = 0;
 		gbc_lblBrushSettings.gridy = 0;
-		mainPanel.add(lblBrushSettings, gbc_lblBrushSettings);
-		
-		drawPanel = new JPanel();
-//		drawPanel.setBorder(null);
-		GridBagConstraints gbc_drawPanel = new GridBagConstraints();
-		gbc_drawPanel.gridheight = 5;
-		gbc_drawPanel.insets = new Insets(0, 0, 0, 5);
-		gbc_drawPanel.fill = GridBagConstraints.BOTH;
-		gbc_drawPanel.gridx = 0;
-		gbc_drawPanel.gridy = 0;
-		mainPanel.add(drawPanel, gbc_drawPanel);
-		drawPanel.setLayout(new BorderLayout(0, 0));
-		
-		JSeparator sep2 = new JSeparator();
-		GridBagConstraints gbc_separator_4 = new GridBagConstraints();
-		gbc_separator_4.fill = GridBagConstraints.HORIZONTAL;
-		gbc_separator_4.gridwidth = 2;
-		gbc_separator_4.insets = new Insets(0, 0, 5, 0);
-		gbc_separator_4.gridx = 2;
-		gbc_separator_4.gridy = 2;
-		mainPanel.add(sep2, gbc_separator_4);
-		
-		
-		JLabel lblBrushThickness = new JLabel("Brush Thickness");
-		GridBagConstraints gbc_lblBrushThickness = new GridBagConstraints();
-		gbc_lblBrushThickness.anchor = GridBagConstraints.NORTH;
-		gbc_lblBrushThickness.insets = new Insets(0, 0, 5, 5);
-		gbc_lblBrushThickness.gridx = 2;
-		gbc_lblBrushThickness.gridy = 3;
-		mainPanel.add(lblBrushThickness, gbc_lblBrushThickness);
-		
-		JSpinner thicknessSpinner = new JSpinner();
-		thicknessSpinner.setModel(new SpinnerNumberModel(6, 1, null, 1));
-		GridBagConstraints gbc_thicknessSpinner = new GridBagConstraints();
-		gbc_thicknessSpinner.insets = new Insets(0, 0, 5, 0);
-		gbc_thicknessSpinner.ipadx = 20;
-		gbc_thicknessSpinner.anchor = GridBagConstraints.NORTH;
-		gbc_thicknessSpinner.gridx = 3;
-		gbc_thicknessSpinner.gridy = 3;
-		mainPanel.add(thicknessSpinner, gbc_thicknessSpinner);
+		settingsPanel.add(lblBrushSettings, gbc_lblBrushSettings);
 		
 		brushColorPicker = new JColorChooser();
+		GridBagConstraints gbc_brushColorPicker = new GridBagConstraints();
+		gbc_brushColorPicker.anchor = GridBagConstraints.WEST;
+		gbc_brushColorPicker.gridwidth = 2;
+		gbc_brushColorPicker.insets = new Insets(0, 0, 5, 0);
+		gbc_brushColorPicker.gridx = 0;
+		gbc_brushColorPicker.gridy = 1;
+		settingsPanel.add(brushColorPicker, gbc_brushColorPicker);
 		brushColorPicker.setBackground(SystemColor.menu);
 		brushColorPicker.setColor(Color.black);
 		brushColorPicker.setPreviewPanel(new JPanel());
 		brushColorPicker.setChooserPanels(new AbstractColorChooserPanel[]{brushColorPicker.getChooserPanels()[1]});
-		Container container = ((Container) brushColorPicker.getChooserPanels()[0].getComponents()[0]);
-		int spinners = 0, sliders = 0;
-		for (int i = 0; i < container.getComponentCount(); i++) {
-			Component comp = container.getComponent(i);
-			if (comp instanceof JSlider) {
-				if (sliders++ >= 3) {
-					container.remove(comp);
-					i--;
-					continue;
-				}
-			} else if (comp instanceof JSpinner) {
-				if (spinners++ >= 3) {
-					container.remove(comp);
-					i--;
-					continue;
-				}
-			} else if (comp instanceof JLabel) {
-				container.remove(comp);
-				i--;
-			}
-		}
-		GridBagConstraints gbc_brushChooser = new GridBagConstraints();
-		gbc_brushChooser.anchor = GridBagConstraints.WEST;
-		gbc_brushChooser.gridwidth = 2;
-		gbc_brushChooser.insets = new Insets(0, 0, 5, 0);
-		gbc_brushChooser.gridx = 2;
-		gbc_brushChooser.gridy = 1;
-		mainPanel.add(brushColorPicker, gbc_brushChooser);
+		removeAlphaSpinner(brushColorPicker);
 		
-		sketchpad = new JLabel("") {
-			private static final long serialVersionUID = 1L;
-			public void paintComponent(Graphics g) {
-				repaintImage();
-				super.paintComponent(g);
-			}
-		};
-		sketchpad.setHorizontalAlignment(SwingConstants.CENTER);
-		sketchpad.setIcon(new StretchIcon(drawnToScreenImage, true));
-		sketchpad.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mousePressed(MouseEvent e) {
-				StretchIcon si = (StretchIcon) sketchpad.getIcon();
-				int x = e.getX() - si.getXOffset();
-				int y = e.getY() - si.getYOffset();
-				x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
-				y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
-				
-				if (x < 0 || x >= canvasImage.getWidth() || y < 0 || y >= canvasImage.getHeight()) {
-					return;
-				}
-				
-				if (e.getButton() == MouseEvent.BUTTON1 && !erasing) {
-					drawing = true;
-					
-					undoRedoHistory.removeAfter(currentHistoryIndex);
-					
-					int thickness = (int) thicknessSpinner.getValue();
-					
-					Line newLine = new Line(thickness, brushColorPicker.getColor());
-					lines.add(newLine);
-					
-					newLine.points.add(new Point(x,y));
-				} else if (e.getButton() == MouseEvent.BUTTON3 && !drawing) {
-					erasing = true;
-					Point point = new Point(x,y);
-					Iterator<Line> it = lines.iterator();
-					while (it.hasNext()) {
-						Line line = it.next();
-						if (line.points.contains(point)) {
-							it.remove();
-							sketchpad.repaint();
-							break;
-						}
+		JSeparator sep2 = new JSeparator();
+		GridBagConstraints gbc_sep2 = new GridBagConstraints();
+		gbc_sep2.fill = GridBagConstraints.HORIZONTAL;
+		gbc_sep2.gridwidth = 2;
+		gbc_sep2.insets = new Insets(0, 0, 5, 0);
+		gbc_sep2.gridx = 0;
+		gbc_sep2.gridy = 2;
+		settingsPanel.add(sep2, gbc_sep2);
+		
+		
+		JLabel lblBrushThickness = new JLabel("Brush Thickness");
+		GridBagConstraints gbc_lblBrushThickness = new GridBagConstraints();
+		gbc_lblBrushThickness.fill = GridBagConstraints.VERTICAL;
+		gbc_lblBrushThickness.insets = new Insets(0, 10, 5, 5);
+		gbc_lblBrushThickness.gridx = 0;
+		gbc_lblBrushThickness.gridy = 3;
+		settingsPanel.add(lblBrushThickness, gbc_lblBrushThickness);
+		
+		JSpinner thicknessSpinner = new JSpinner();
+		GridBagConstraints gbc_thicknessSpinner = new GridBagConstraints();
+		gbc_thicknessSpinner.fill = GridBagConstraints.HORIZONTAL;
+		gbc_thicknessSpinner.anchor = GridBagConstraints.NORTH;
+		gbc_thicknessSpinner.insets = new Insets(0, 25, 5, 25);
+		gbc_thicknessSpinner.gridx = 1;
+		gbc_thicknessSpinner.gridy = 3;
+		settingsPanel.add(thicknessSpinner, gbc_thicknessSpinner);
+		thicknessSpinner.setModel(new SpinnerNumberModel(6, 1, null, 1));
+		
+		champdUpPanel = new JPanel();
+		GridBagConstraints gbc_champdUpPanel = new GridBagConstraints();
+		gbc_champdUpPanel.fill = GridBagConstraints.BOTH;
+		gbc_champdUpPanel.gridwidth = 2;
+		gbc_champdUpPanel.insets = new Insets(0, 0, 0, 5);
+		gbc_champdUpPanel.gridx = 0;
+		gbc_champdUpPanel.gridy = 4;
+		settingsPanel.add(champdUpPanel, gbc_champdUpPanel);
+		champdUpPanel.setVisible(false);
+		GridBagLayout gbl_champdUpPanel = new GridBagLayout();
+		gbl_champdUpPanel.columnWidths = new int[] {0, 0};
+		gbl_champdUpPanel.rowHeights = new int[]{0, 0, 0, 0};
+		gbl_champdUpPanel.columnWeights = new double[]{0.0, 1.0, 0.0};
+		gbl_champdUpPanel.rowWeights = new double[]{0.0, 0.0, 0.0, Double.MIN_VALUE};
+		champdUpPanel.setLayout(gbl_champdUpPanel);
+		
+		JSeparator separator = new JSeparator();
+		GridBagConstraints gbc_separator = new GridBagConstraints();
+		gbc_separator.fill = GridBagConstraints.HORIZONTAL;
+		gbc_separator.gridwidth = 3;
+		gbc_separator.insets = new Insets(0, 0, 5, 5);
+		gbc_separator.gridx = 0;
+		gbc_separator.gridy = 0;
+		champdUpPanel.add(separator, gbc_separator);
+		
+		JLabel lblChampdUpName = new JLabel("Champ'd Up");
+		GridBagConstraints gbc_lblChampdUpName = new GridBagConstraints();
+		gbc_lblChampdUpName.gridwidth = 3;
+		gbc_lblChampdUpName.insets = new Insets(0, 0, 5, 0);
+		gbc_lblChampdUpName.gridx = 0;
+		gbc_lblChampdUpName.gridy = 1;
+		champdUpPanel.add(lblChampdUpName, gbc_lblChampdUpName);
+		
+		JLabel lblChallengerName = new JLabel("Challenger Name");
+		GridBagConstraints gbc_lblChallengerName = new GridBagConstraints();
+		gbc_lblChallengerName.insets = new Insets(0, 10, 0, 5);
+		gbc_lblChallengerName.anchor = GridBagConstraints.EAST;
+		gbc_lblChallengerName.gridx = 0;
+		gbc_lblChallengerName.gridy = 2;
+		champdUpPanel.add(lblChallengerName, gbc_lblChallengerName);
+		
+		txtChampdUpName = new HintTextField("Enter Challenger Name");
+		txtChampdUpName.setToolTipText("");
+		GridBagConstraints gbc_txtChampdUpName = new GridBagConstraints();
+		gbc_txtChampdUpName.insets = new Insets(0, 0, 0, 5);
+		gbc_txtChampdUpName.fill = GridBagConstraints.HORIZONTAL;
+		gbc_txtChampdUpName.gridx = 1;
+		gbc_txtChampdUpName.gridy = 2;
+		champdUpPanel.add(txtChampdUpName, gbc_txtChampdUpName);
+		txtChampdUpName.setColumns(10);
+		
+		JButton btnSubmitName = new JButton("Submit Name");
+		btnSubmitName.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				if (!txtChampdUpName.getText().isEmpty()) {
+					String out = txtChampdUpName.getText();
+					if (out.toLowerCase().startsWith("\u0073\u0061\u006E\u0073")) {
+						BufferedImage newImg = new BufferedImage(32,32,BufferedImage.TYPE_INT_ARGB);
+						Graphics2D g = newImg.createGraphics();
+						g.drawImage(window.getIconImage(), 0, 0, null);
+						g.setColor(new Color(0,255,255));
+						g.fillOval(16, 5, 4, 4);
+						g.dispose();
+						window.setIconImage(newImg);
 					}
-				}
-			}
-			@Override
-			public void mouseReleased(MouseEvent e) {
-				StretchIcon si = (StretchIcon) sketchpad.getIcon();
-				if (e.getButton() == MouseEvent.BUTTON1) {
-					if (lines.isEmpty()) return;
-					drawing = false;
-					int x = e.getX() - si.getXOffset();
-					int y = e.getY() - si.getYOffset();
-					x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
-					y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
-					
-					if (x < 0 || x >= canvasImage.getWidth() || y < 0 || y >= canvasImage.getHeight()) {
-						return;
-					}
-					Line line = lines.get(lines.size()-1);
-					line.points.add(new Point(x,y));
-					
-					saveHistory();
-				} else if (e.getButton() == MouseEvent.BUTTON3) {
-					erasing = false;
-					
-					if (lines.size() != undoRedoHistory.get(currentHistoryIndex).size())
-						saveHistory();
-				}
-			}
-		});
-		sketchpad.addMouseMotionListener(new MouseMotionAdapter() {
-			@Override
-			public void mouseDragged(MouseEvent e) {
-				StretchIcon si = (StretchIcon) sketchpad.getIcon();
-				int x = e.getX() - si.getXOffset();
-				int y = e.getY() - si.getYOffset();
-				x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
-				y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
-				
-				if (erasing) {
-					Point point = new Point(x,y);
-					Iterator<Line> it = lines.iterator();
-					while (it.hasNext()) {
-						Line line = it.next();
-						if (line.points.contains(point)) {
-							it.remove();
-							sketchpad.repaint();
-							break;
-						}
-					}
-				} else if (drawing) {
-					Line line = lines.get(lines.size()-1);
-					if (x < 0 || x >= getCanvasWidth() || y < 0 || y >= getCanvasHeight()) {
-						return;
-					}
-					Point newPoint = new Point(x,y);
-					if (!line.points.get(line.points.size()-1).equals(newPoint)) {
-						line.points.add(newPoint);
-					}
-					sketchpad.repaint();
+					out = out.trim().replaceAll("['\"]", "\\$0");
+					getWebsocketServer().broadcast("SUBMITNAME;data.val = '" + out + "'");
 				}
 			}
 		});
-		drawPanel.add(sketchpad, BorderLayout.CENTER);
+		GridBagConstraints gbc_btnSubmitName = new GridBagConstraints();
+		gbc_btnSubmitName.insets = new Insets(0, 0, 0, 5);
+		gbc_btnSubmitName.gridx = 2;
+		gbc_btnSubmitName.gridy = 2;
+		champdUpPanel.add(btnSubmitName, gbc_btnSubmitName);
 		
 		teekoPanel = new JPanel();
-		teekoPanel.setVisible(false);
 		GridBagConstraints gbc_teekoPanel = new GridBagConstraints();
-		gbc_teekoPanel.gridwidth = 2;
 		gbc_teekoPanel.fill = GridBagConstraints.BOTH;
-		gbc_teekoPanel.gridx = 2;
+		gbc_teekoPanel.gridwidth = 2;
+		gbc_teekoPanel.gridx = 0;
 		gbc_teekoPanel.gridy = 4;
-		mainPanel.add(teekoPanel, gbc_teekoPanel);
+		settingsPanel.add(teekoPanel, gbc_teekoPanel);
+		teekoPanel.setVisible(false);
 		GridBagLayout gbl_teekoPanel = new GridBagLayout();
 		gbl_teekoPanel.columnWidths = new int[]{0, 0, 0, 0, 0, 0, 0};
 		gbl_teekoPanel.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0};
@@ -1032,7 +918,7 @@ public class JackboxDrawer {
 		shirtBackgroundColorPicker.setPreviewPanel(new JPanel());
 		shirtBackgroundColorPicker.setChooserPanels(new AbstractColorChooserPanel[]{shirtBackgroundColorPicker.getChooserPanels()[1]});
 		shirtBackgroundColorPicker.setColor(TEEKO_BG_COLORS[0]);
-		
+		removeAlphaSpinner(shirtBackgroundColorPicker);
 		ActionListener teeKoButtonListener = new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				shirtBackgroundColorPicker.setColor(((Component) e.getSource()).getBackground());
@@ -1041,7 +927,6 @@ public class JackboxDrawer {
 		
 		JButton btnBlue = new JButton("Blue");
 		btnBlue.addActionListener(teeKoButtonListener);
-		btnBlue.setForeground(Color.WHITE);
 		btnBlue.setBackground(TEEKO_BG_COLORS[0]);
 		GridBagConstraints gbc_btnBlue = new GridBagConstraints();
 		gbc_btnBlue.insets = new Insets(0, 10, 5, 5);
@@ -1051,7 +936,6 @@ public class JackboxDrawer {
 		
 		JButton btnGray = new JButton("Gray");
 		btnGray.addActionListener(teeKoButtonListener);
-		btnGray.setForeground(Color.WHITE);
 		btnGray.setBackground(TEEKO_BG_COLORS[1]);
 		GridBagConstraints gbc_btnGray = new GridBagConstraints();
 		gbc_btnGray.insets = new Insets(0, 0, 5, 5);
@@ -1061,7 +945,6 @@ public class JackboxDrawer {
 		
 		JButton btnBlack = new JButton("Black");
 		btnBlack.addActionListener(teeKoButtonListener);
-		btnBlack.setForeground(Color.GRAY);
 		btnBlack.setBackground(TEEKO_BG_COLORS[2]);
 		GridBagConstraints gbc_btnBlack = new GridBagConstraints();
 		gbc_btnBlack.insets = new Insets(0, 0, 5, 5);
@@ -1071,7 +954,6 @@ public class JackboxDrawer {
 		
 		JButton btnRed = new JButton("Red");
 		btnRed.addActionListener(teeKoButtonListener);
-		btnRed.setForeground(Color.GRAY);
 		btnRed.setBackground(TEEKO_BG_COLORS[3]);
 		GridBagConstraints gbc_btnRed = new GridBagConstraints();
 		gbc_btnRed.insets = new Insets(0, 0, 5, 5);
@@ -1081,7 +963,6 @@ public class JackboxDrawer {
 		
 		JButton btnOlive = new JButton("Olive");
 		btnOlive.addActionListener(teeKoButtonListener);
-		btnOlive.setForeground(Color.WHITE);
 		btnOlive.setBackground(TEEKO_BG_COLORS[4]);
 		GridBagConstraints gbc_btnOlive = new GridBagConstraints();
 		gbc_btnOlive.insets = new Insets(0, 0, 5, 5);
@@ -1110,75 +991,127 @@ public class JackboxDrawer {
 		gbc_lblThisBackgroundColor.gridy = 5;
 		teekoPanel.add(lblContrastWarning, gbc_lblThisBackgroundColor);
 		
-		champdUpPanel = new JPanel();
-		champdUpPanel.setVisible(false);
-		GridBagConstraints gbc_champdUpPanel = new GridBagConstraints();
-		gbc_champdUpPanel.gridwidth = 2;
-		gbc_champdUpPanel.fill = GridBagConstraints.BOTH;
-		gbc_champdUpPanel.gridx = 2;
-		gbc_champdUpPanel.gridy = 4;
-		mainPanel.add(champdUpPanel, gbc_champdUpPanel);
-		GridBagLayout gbl_champdUpPanel = new GridBagLayout();
-		gbl_champdUpPanel.columnWidths = new int[] {0, 0};
-		gbl_champdUpPanel.rowHeights = new int[]{0, 0, 0, 0};
-		gbl_champdUpPanel.columnWeights = new double[]{0.0, 1.0, 0.0};
-		gbl_champdUpPanel.rowWeights = new double[]{0.0, 0.0, 0.0, Double.MIN_VALUE};
-		champdUpPanel.setLayout(gbl_champdUpPanel);
-		
-		JSeparator separator = new JSeparator();
-		GridBagConstraints gbc_separator = new GridBagConstraints();
-		gbc_separator.fill = GridBagConstraints.HORIZONTAL;
-		gbc_separator.gridwidth = 3;
-		gbc_separator.insets = new Insets(0, 0, 5, 5);
-		gbc_separator.gridx = 0;
-		gbc_separator.gridy = 0;
-		champdUpPanel.add(separator, gbc_separator);
-		
-		JLabel lblChampdUpName = new JLabel("Champ'd Up");
-		GridBagConstraints gbc_lblChampdUpName = new GridBagConstraints();
-		gbc_lblChampdUpName.gridwidth = 3;
-		gbc_lblChampdUpName.insets = new Insets(0, 0, 5, 0);
-		gbc_lblChampdUpName.gridx = 0;
-		gbc_lblChampdUpName.gridy = 1;
-		champdUpPanel.add(lblChampdUpName, gbc_lblChampdUpName);
-		
-		JLabel lblChallengerName = new JLabel("Challenger Name");
-		GridBagConstraints gbc_lblChallengerName = new GridBagConstraints();
-		gbc_lblChallengerName.insets = new Insets(0, 0, 0, 5);
-		gbc_lblChallengerName.anchor = GridBagConstraints.EAST;
-		gbc_lblChallengerName.gridx = 0;
-		gbc_lblChallengerName.gridy = 2;
-		champdUpPanel.add(lblChallengerName, gbc_lblChallengerName);
-		
-		txtChampdUpName = new HintTextField("Enter Challenger Name");
-		txtChampdUpName.setToolTipText("");
-		GridBagConstraints gbc_txtChampdUpName = new GridBagConstraints();
-		gbc_txtChampdUpName.insets = new Insets(0, 0, 0, 5);
-		gbc_txtChampdUpName.fill = GridBagConstraints.HORIZONTAL;
-		gbc_txtChampdUpName.gridx = 1;
-		gbc_txtChampdUpName.gridy = 2;
-		champdUpPanel.add(txtChampdUpName, gbc_txtChampdUpName);
-		txtChampdUpName.setColumns(10);
-		
-		JButton btnSubmitName = new JButton("Submit Name");
-		btnSubmitName.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				if (!txtChampdUpName.getText().isEmpty()) {
-					String out = txtChampdUpName.getText();
-					out = out.trim().replaceAll("['\"]", "\\$0");
-					getWebsocketServer().broadcast("SUBMITNAME;data.val = '" + out + "'");
+		sketchpad = new JLabel("");
+		sketchpad.setHorizontalAlignment(SwingConstants.CENTER);
+		sketchpad.setIcon(new StretchIcon(drawnToScreenImage, true));
+		sketchpad.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent e) {
+				StretchIcon si = (StretchIcon) sketchpad.getIcon();
+				int x = e.getX() - si.getXOffset();
+				int y = e.getY() - si.getYOffset();
+				x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
+				y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
+				
+				previousMousePos = e.getPoint();
+				
+				if (x < 0 || x >= canvasImage.getWidth() || y < 0 || y >= canvasImage.getHeight()) {
+					return;
+				}
+				
+				if (e.getButton() == MouseEvent.BUTTON1 && !erasing) {
+					drawing = true;
+					previousMousePos = e.getPoint();
+					
+					undoRedoHistory.removeAfter(currentHistoryIndex);
+					
+					int thickness = (int) thicknessSpinner.getValue();
+					
+					JackboxLine newLine = new JackboxLine(thickness, brushColorPicker.getColor());
+					lines.add(newLine);
+					
+					newLine.points.add(new LinePoint(x,y));
+					newLine.points.add(new LinePoint(x,y));
+				} else if (e.getButton() == MouseEvent.BUTTON3 && !drawing) {
+					erasing = true;
+				}
+			}
+			@Override
+			public void mouseReleased(MouseEvent e) {
+				StretchIcon si = (StretchIcon) sketchpad.getIcon();
+				if (e.getButton() == MouseEvent.BUTTON1 && drawing) {
+					if (lines.isEmpty()) return;
+					drawing = false;
+					int x = e.getX() - si.getXOffset();
+					int y = e.getY() - si.getYOffset();
+					x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
+					y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
+					
+					if (x < 0 || x >= canvasImage.getWidth() || y < 0 || y >= canvasImage.getHeight()) {
+						return;
+					}
+					JackboxLine line = lines.get(lines.size()-1);
+					line.points.add(new LinePoint(x,y));
+					
+					saveHistory();
+					repaintImage(true);
+				} else if (e.getButton() == MouseEvent.BUTTON3 && erasing) {
+					erasing = false;
+					
+					if (lines.size() != undoRedoHistory.get(currentHistoryIndex).size())
+						saveHistory();
 				}
 			}
 		});
-		GridBagConstraints gbc_btnSubmitName = new GridBagConstraints();
-		gbc_btnSubmitName.insets = new Insets(0, 0, 0, 5);
-		gbc_btnSubmitName.gridx = 2;
-		gbc_btnSubmitName.gridy = 2;
-		champdUpPanel.add(btnSubmitName, gbc_btnSubmitName);
-		
-		container = ((Container) shirtBackgroundColorPicker.getChooserPanels()[0].getComponents()[0]);
-		spinners = 0;
-		sliders = 0;
+		sketchpad.addMouseMotionListener(new MouseMotionAdapter() {
+			@Override
+			public void mouseDragged(MouseEvent e) {
+				StretchIcon si = (StretchIcon) sketchpad.getIcon();
+				int x = e.getX() - si.getXOffset();
+				int y = e.getY() - si.getYOffset();
+				x = (int) (((double) x / (double) si.getW()) * getCanvasWidth());
+				y = (int) (((double) y / (double) si.getH()) * getCanvasHeight());
+				
+				
+				if (erasing) {
+					boolean removedOne = false;
+					int count = 0;
+					Iterator<JackboxLine> it = lines.iterator();
+					while (it.hasNext()) {
+						JackboxLine line = it.next();
+						if (count++ < importLines) {
+							continue;
+						}
+						
+						for (int i = 0; i < line.getPoints().length-1; i++) {
+							LinePoint pointA = line.getPoints()[i];
+							LinePoint pointB = line.getPoints()[i+1];
+							double halfThick = line.getThickness()/2d;
+							
+							Line2D.Double line2d = new Line2D.Double(pointA.getX(), pointA.getY(), pointB.getX(), pointB.getY());
+							
+							if (line2d.intersects(x-halfThick, y-halfThick, line.getThickness(), line.getThickness())) {
+								it.remove();
+								removedOne = true;
+								break;
+							}
+						}
+					}
+					if (removedOne) {
+						repaintImage(true);
+					}
+				} else if (drawing) {
+					JackboxLine line = lines.get(lines.size()-1);
+					if (x < 0 || x >= getCanvasWidth() || y < 0 || y >= getCanvasHeight()) {
+						return;
+					}
+					LinePoint newPoint = new LinePoint(x,y);
+					if (!line.points.get(line.points.size()-1).equals(newPoint)) {
+						line.points.add(newPoint);
+					}
+					repaintImage(false);
+				}
+				previousMousePos = e.getPoint();
+			}
+		});
+		sketchpad.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
+		drawPanel.add(sketchpad, BorderLayout.CENTER);
+	}
+	
+	private void removeAlphaSpinner(JColorChooser chooser) {
+		Container container = ((Container) chooser.getChooserPanels()[0].getComponents()[0]);
+		int spinners = 0;
+		int sliders = 0;
 		for (int i = 0; i < container.getComponentCount(); i++) {
 			Component comp = container.getComponent(i);
 			if (comp instanceof JSlider) {
@@ -1191,7 +1124,7 @@ public class JackboxDrawer {
 				((JSlider) comp).addChangeListener(new ChangeListener() {
 					@Override
 					public void stateChanged(ChangeEvent arg0) {
-						sketchpad.repaint();
+						repaintImage(true);
 					}
 				});
 			} else if (comp instanceof JSpinner) {
@@ -1203,7 +1136,7 @@ public class JackboxDrawer {
 				((JSpinner) comp).addChangeListener(new ChangeListener() {
 					@Override
 					public void stateChanged(ChangeEvent arg0) {
-						sketchpad.repaint();
+						repaintImage(true);
 					}
 				});
 			} else if (comp instanceof JLabel) {

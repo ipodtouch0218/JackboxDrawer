@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 @Data @AllArgsConstructor
-public class Point {
+public class LinePoint {
 	
 	private int x, y;
 	

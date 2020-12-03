@@ -8,27 +8,23 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 @NoArgsConstructor @ToString
-public class Line {
+public class JackboxLine {
 
-	public Line(int thickness, Color color) {
+	public JackboxLine(int thickness, Color color) {
 		this.thickness = thickness;
 		setColor(color);
 	}
 	
-	public final ArrayList<Point> points = new ArrayList<>();
+	public final ArrayList<LinePoint> points = new ArrayList<>();
 	@Getter private int thickness;
 	@Getter private String color;
 	
-	public Point[] getPoints() {
-		return points.toArray(new Point[]{});
+	public LinePoint[] getPoints() {
+		return points.toArray(new LinePoint[]{});
 	}
 	
 	public void setColor(Color color) {
 		this.color = String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
 	}
 	
-//	@JsonIgnore
-//	public boolean intersectsPoint(Point point) {
-//		
-//	}
 }

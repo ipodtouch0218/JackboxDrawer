@@ -4,12 +4,11 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBuffer;
 import java.util.ArrayList;
 
 import me.ipodtouch0218.jackboxdrawer.JackboxDrawer;
-import me.ipodtouch0218.jackboxdrawer.obj.Line;
-import me.ipodtouch0218.jackboxdrawer.obj.Point;
+import me.ipodtouch0218.jackboxdrawer.obj.JackboxLine;
+import me.ipodtouch0218.jackboxdrawer.obj.LinePoint;
 
 public class ImageVectorizer {
 
@@ -49,7 +48,7 @@ public class ImageVectorizer {
 		return new Color((int) (t*c1.getRed() + (1.0-t)*c2.getRed()),(int) (t*c1.getGreen() + (1.0-t)*c2.getGreen()),(int) (t*c1.getBlue() + (1.0-t)*c2.getBlue()));
 	}
 	
-	public static ArrayList<Line> vectorizeImage(BufferedImage image, int canvasWidth, int canvasHeight, double scaling, double colorDistanceGroupingMax, int alphaCutoff) {
+	public static ArrayList<JackboxLine> vectorizeImage(BufferedImage image, int canvasWidth, int canvasHeight, double scaling, double colorDistanceGroupingMax, int alphaCutoff) {
 		
 		colorDistanceGroupingMax *= colorDistanceGroupingMax;
 		int scaledWidth = (int) (canvasWidth / scaling);
@@ -58,7 +57,7 @@ public class ImageVectorizer {
 		int xFactor = canvasWidth / scaledWidth;
 		int yFactor = canvasHeight / scaledHeight;
 		
-		ArrayList<Line> lines = new ArrayList<>();
+		ArrayList<JackboxLine> lines = new ArrayList<>();
 		
 		//Rescale image
 		Image scaled = image.getScaledInstance((int) (canvasWidth / scaling), (int) (canvasHeight / scaling), Image.SCALE_AREA_AVERAGING);
@@ -72,15 +71,15 @@ public class ImageVectorizer {
 		
 		//Loop time
 		for (int x = 0; x < scaledWidth; x++) {
-			Line currentLine = null;
+			JackboxLine currentLine = null;
 			int currentLineColor = -1;
 			for (int y = 0; y < scaledHeight; y++) {
 				Color color = new Color(image.getRGB(x, y), true);
-				Point thisPoint = new Point(x * xFactor, y * yFactor);
+				LinePoint thisPoint = new LinePoint(x * xFactor, y * yFactor);
 				
 				if (color.getAlpha() < alphaCutoff) {
 					if (currentLine != null) {
-						currentLine.points.add(new Point(x * xFactor, (y-1) * yFactor));
+						currentLine.points.add(new LinePoint(x * xFactor, (y-1) * yFactor));
 						currentLine = null;
 					}
 					continue;
@@ -96,7 +95,7 @@ public class ImageVectorizer {
 				
 				//First line of a row.
 				if (currentLine == null) {
-					currentLine = new Line(xFactor + 1, color);
+					currentLine = new JackboxLine(xFactor + 1, color);
 					currentLine.points.add(thisPoint);
 					lines.add(currentLine);
 					currentLineColor = color.getRGB();
@@ -109,7 +108,7 @@ public class ImageVectorizer {
 					currentLine.points.add(thisPoint);
 					currentLine.setColor(mixColors(Color.decode(currentLine.getColor()), new Color(image.getRGB(x, y-1)), 0.5));
 					
-					currentLine = new Line(xFactor + 1, color);
+					currentLine = new JackboxLine(xFactor + 1, color);
 					currentLine.points.add(thisPoint);
 					lines.add(currentLine);
 					currentLineColor = color.getRGB();
@@ -118,7 +117,7 @@ public class ImageVectorizer {
 			}
 			//Finish the line
 			if (currentLine != null) {
-				currentLine.points.add(new Point(x * xFactor, (scaledHeight) * yFactor));
+				currentLine.points.add(new LinePoint(x * xFactor, (scaledHeight) * yFactor));
 				currentLine = null;
 			}
 		}

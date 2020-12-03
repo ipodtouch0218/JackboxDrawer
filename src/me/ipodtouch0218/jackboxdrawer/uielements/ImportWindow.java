@@ -1,4 +1,4 @@
-package me.ipodtouch0218.jackboxdrawer;
+package me.ipodtouch0218.jackboxdrawer.uielements;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -11,9 +11,11 @@ import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.imageio.ImageIO;
 import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
@@ -24,11 +26,12 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import me.ipodtouch0218.jackboxdrawer.SupportedGames.ImageType;
-import me.ipodtouch0218.jackboxdrawer.obj.Line;
+import me.ipodtouch0218.jackboxdrawer.JackboxDrawer;
+import me.ipodtouch0218.jackboxdrawer.SupportedGames;
+import me.ipodtouch0218.jackboxdrawer.obj.JackboxLine;
 import me.ipodtouch0218.jackboxdrawer.util.ImageVectorizer;
 
-public class ImportSettings extends JDialog {
+public class ImportWindow extends JDialog {
 
 	private static final long serialVersionUID = 7283260108551606453L;
 	
@@ -37,15 +40,24 @@ public class ImportSettings extends JDialog {
 	private JSlider sliderColorDistance, sliderResolution, sliderAlpha;
 	private JLabel lblTransparencyCutoff;
 
-	public ImportSettings(BufferedImage image) {
+	public ImportWindow(BufferedImage image) {
 		AtomicBoolean imported = new AtomicBoolean(false);
 		
 		JackboxDrawer drawer = JackboxDrawer.INSTANCE;
 		int width = drawer.getCanvasWidth();
 		int height = drawer.getCanvasHeight();
-		ArrayList<Line> prevLines = drawer.getLines();
+		
+		ArrayList<JackboxLine> prevLines = drawer.getLines();
+		BufferedImage prevImportImage = drawer.getImportedImage();
+		int prevImportLines = drawer.getImportLines();
+		
+		drawer.setImportedImage(image);
 		
 		setTitle("Import Settings");
+		try {
+			setIconImage(ImageIO.read(getClass().getResource("/img/jbd-smol.png")));
+		} catch (IOException e1) {
+		}
 		setModalityType(ModalityType.TOOLKIT_MODAL);
 		setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -79,9 +91,10 @@ public class ImportSettings extends JDialog {
 			sliderColorDistance.setValue(215);
 			sliderColorDistance.addChangeListener(new ChangeListener() {
 				public void stateChanged(ChangeEvent arg0) {
-					ArrayList<Line> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
+					ArrayList<JackboxLine> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
 					drawer.setLines(lines);
-					drawer.getSketchpad().repaint();
+					drawer.setImportLines(lines.size());
+					drawer.repaintImage(true);
 					updateLinesLabel(lines.size());
 				}
 			});
@@ -109,9 +122,10 @@ public class ImportSettings extends JDialog {
 			sliderResolution.setMaximum(7);
 			sliderResolution.addChangeListener(new ChangeListener() {
 				public void stateChanged(ChangeEvent arg0) {
-					ArrayList<Line> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
+					ArrayList<JackboxLine> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
 					drawer.setLines(lines);
-					drawer.getSketchpad().repaint();
+					drawer.setImportLines(lines.size());
+					drawer.repaintImage(true);
 					updateLinesLabel(lines.size());
 				}
 			});
@@ -142,9 +156,10 @@ public class ImportSettings extends JDialog {
 			sliderAlpha.setMaximum(256);
 			sliderAlpha.addChangeListener(new ChangeListener() {
 				public void stateChanged(ChangeEvent arg0) {
-					ArrayList<Line> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
+					ArrayList<JackboxLine> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
 					drawer.setLines(lines);
-					drawer.getSketchpad().repaint();
+					drawer.setImportLines(lines.size());
+					drawer.repaintImage(true);
 					updateLinesLabel(lines.size());
 				}
 			});
@@ -187,9 +202,6 @@ public class ImportSettings extends JDialog {
 					public void actionPerformed(ActionEvent arg0) {
 						imported.set(true);
 						dispose();
-						drawer.saveHistory();
-						drawer.setImportedImage(image);
-						JOptionPane.showMessageDialog(drawer.getWindow(), drawer.getLines().size() + " lines drawn.", "Image Loaded", JOptionPane.INFORMATION_MESSAGE);
 					}
 				});
 				okButton.setActionCommand("OK");
@@ -221,15 +233,23 @@ public class ImportSettings extends JDialog {
 		addWindowListener(new WindowAdapter() {
 			@Override
 			public void windowClosed(WindowEvent arg0) {
-				if (!imported.get()) {
+				if (imported.get()) {
+					drawer.setImportedImage(image);
+					drawer.setImportLines(drawer.getLines().size());
+					drawer.clearHistory();
+					JOptionPane.showMessageDialog(drawer.getWindow(), drawer.getLines().size() + " lines drawn.", "Image Loaded", JOptionPane.INFORMATION_MESSAGE);
+				} else {
 					drawer.setLines(prevLines);
+					drawer.setImportedImage(prevImportImage);
+					drawer.setImportLines(prevImportLines);
 				}
+				drawer.repaintImage(true);
 			}
 		});
 		
-		ArrayList<Line> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
+		ArrayList<JackboxLine> lines = ImageVectorizer.vectorizeImage(image, width, height, (8-sliderResolution.getValue()), (256-sliderColorDistance.getValue()), (255-sliderAlpha.getValue()));
 		drawer.setLines(lines);
-		drawer.getSketchpad().repaint();
+		drawer.repaintImage(true);
 		updateLinesLabel(lines.size());
 		setVisible(true);
 	}
@@ -239,21 +259,21 @@ public class ImportSettings extends JDialog {
 		
 		if (JackboxDrawer.INSTANCE.getCurrentGame() == SupportedGames.TEE_KO) {
 			if (lines < 1500) {
-				lblLag.setText("Good to use, even with multiple users.");
+				lblLag.setText("Shouldn't be laggy, even with multiple users.");
 				lblLag.setForeground(new Color(51, 204, 51));
 			} else {
 				lblLag.setText("Might break the game. Not recommended.");
 				lblLag.setForeground(new Color(204, 0, 0));
 			}
-		} else if (JackboxDrawer.INSTANCE.getCurrentGame().getType() == ImageType.VECTOR) {
+		} else {
 			if (lines < 1250) {
 				lblLag.setText("Shouldn't be laggy, even with multiple users.");
 				lblLag.setForeground(new Color(51, 204, 51));
 			} else if (lines < 3500) {
-				lblLag.setText("Might be laggy with multiple users certain games.");
+				lblLag.setText("Might be laggy with multiple users in certain games.");
 				lblLag.setForeground(new Color(255, 153, 0));
 			} else {
-				lblLag.setText("Will be laggy with only one user.");
+				lblLag.setText("Will be laggy, even with only one user.");
 				lblLag.setForeground(new Color(204, 0, 0));
 			}
 		}

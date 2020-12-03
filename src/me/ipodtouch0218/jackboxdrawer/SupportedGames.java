@@ -13,14 +13,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import me.ipodtouch0218.jackboxdrawer.obj.Line;
+import me.ipodtouch0218.jackboxdrawer.obj.JackboxLine;
 import me.ipodtouch0218.jackboxdrawer.obj.PushTheButtonLine;
 import me.ipodtouch0218.jackboxdrawer.util.VolatileImageHelper;
 
 @Getter @AllArgsConstructor
 public enum SupportedGames {
 	
-	//TODO CHECK
 	DRAWFUL_1("Drawful 1", ImageType.BITMAP, 240, 300, (jbd) -> {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
@@ -41,7 +40,6 @@ public enum SupportedGames {
 		}
 		return false;
 	}),
-	//TODO Check
 	BIDIOTS("Bidiots", ImageType.BITMAP, 240, 300, (jbd) -> {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
@@ -53,7 +51,6 @@ public enum SupportedGames {
 		}
 		return false;
 	}),
-	//TODO CHECK
 	TEE_KO("Tee K.O.", ImageType.VECTOR, 240, 300, (jbd) -> {
 		try {
 			Color bg = jbd.getShirtBackgroundColorPicker().getColor();
@@ -64,10 +61,9 @@ public enum SupportedGames {
 		}
 		return false;
 	}),
-	//TODO CHECK
 	PUSH_THE_BUTTON("Push the Button", ImageType.VECTOR, 240, 300, (jbd) -> {
 		ArrayList<PushTheButtonLine> list = new ArrayList<>();
-		for (Line lines : jbd.getLines()) {
+		for (JackboxLine lines : jbd.getLines()) {
 			list.add(new PushTheButtonLine(lines));
 		}
 		
@@ -79,7 +75,6 @@ public enum SupportedGames {
 		}
 		return false;
 	}),
-	//TODO CHECK
 	TRIVIA_MURDER_PARTY_1("Trivia Murder Party 1", ImageType.BITMAP, 240, 300, (jbd) -> {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
@@ -93,7 +88,7 @@ public enum SupportedGames {
 	}),
 	CHAMPD_UP("Champ'd Up", ImageType.VECTOR, 640, 640, (jbd) -> {
 		ArrayList<PushTheButtonLine> list = new ArrayList<>();
-		for (Line lines : jbd.getLines()) {
+		for (JackboxLine lines : jbd.getLines()) {
 			list.add(new PushTheButtonLine(lines));
 		}
 		list.forEach(ptbl -> ptbl.setThickness(Math.max(1,ptbl.getThickness()-4)));
