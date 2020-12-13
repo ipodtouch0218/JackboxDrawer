@@ -54,7 +54,7 @@ public enum SupportedGames {
 	TEE_KO("Tee K.O.", ImageType.VECTOR, 240, 300, (jbd) -> {
 		try {
 			Color bg = jbd.getShirtBackgroundColorPicker().getColor();
-			jbd.getWebsocketServer().broadcast("data.pictureLines = " + new ObjectMapper().writeValueAsString(jbd.getLines()) + "; data.background = '" + String.format("#%02x%02x%02x", bg.getRed(), bg.getGreen(), bg.getBlue()) + "'");
+			jbd.getWebsocketServer().broadcast("data.body.pictureLines = " + new ObjectMapper().writeValueAsString(jbd.getLines()) + "; data.body.background = '" + String.format("#%02x%02x%02x", bg.getRed(), bg.getGreen(), bg.getBlue()) + "'");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
