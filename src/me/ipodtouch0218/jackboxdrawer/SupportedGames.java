@@ -91,7 +91,7 @@ public enum SupportedGames {
 		for (JackboxLine lines : jbd.getLines()) {
 			list.add(new PushTheButtonLine(lines));
 		}
-		list.forEach(ptbl -> ptbl.setThickness(Math.max(1,ptbl.getThickness()-4)));
+		list.forEach(ptbl -> ptbl.setThickness(Math.max(1,ptbl.getThickness()-(jbd.getImportLines() > 0 ? -10 : 4))));
 		
 		try {			
 			jbd.getWebsocketServer().broadcast("data.val.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));

@@ -7,6 +7,7 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 
 import me.ipodtouch0218.jackboxdrawer.JackboxDrawer;
+import me.ipodtouch0218.jackboxdrawer.SupportedGames;
 import me.ipodtouch0218.jackboxdrawer.obj.JackboxLine;
 import me.ipodtouch0218.jackboxdrawer.obj.LinePoint;
 
@@ -102,6 +103,8 @@ public class ImageVectorizer {
 					continue;
 				}
 				
+
+				
 				double colorDistanceSquared = colorDistanceSquared(color.getRGB(), currentLineColor);
 				if (colorDistanceSquared > colorDistanceGroupingMax) {
 					//Too different to be grouped. Add a point above this point, and start a new line.
@@ -113,6 +116,11 @@ public class ImageVectorizer {
 					lines.add(currentLine);
 					currentLineColor = color.getRGB();
 					continue;
+				} else {
+					//group the points, if its champd up we need points on every pixel.. ugh.
+					if (JackboxDrawer.INSTANCE.getCurrentGame() == SupportedGames.CHAMPD_UP) {
+						currentLine.points.add(thisPoint);
+					}
 				}
 			}
 			//Finish the line

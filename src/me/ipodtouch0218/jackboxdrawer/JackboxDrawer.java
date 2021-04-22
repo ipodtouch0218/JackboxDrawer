@@ -87,7 +87,7 @@ public class JackboxDrawer {
 	public static JackboxDrawer INSTANCE;
 	
 	//--Constants--//
-	public static final String VERSION = "1.4.2";
+	public static final String VERSION = "1.4.3";
 	private static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final Color[] TEEKO_BG_COLORS = {new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)};
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
@@ -127,12 +127,15 @@ public class JackboxDrawer {
 	@Getter @Setter private ArrayList<JackboxLine> lines = new ArrayList<>();
 	private boolean drawing, erasing;
 	@Getter @Setter private int importLines;
-	private Point previousMousePos;
+	Point previousMousePos;
 	
 	//Images
 	@Getter @Setter private BufferedImage importedImage;
 	@Getter private VolatileImage canvasImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.TRANSLUCENT);
 	private VolatileImage drawnToScreenImage  = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.OPAQUE);
+	
+	//Game Specific
+	private boolean sentChampdUpName;
 	
 	//--Callback Functions & Classes--//
 	
@@ -202,6 +205,14 @@ public class JackboxDrawer {
 		if (drawing || erasing)
 			return;
 		
+		if (currentGame == SupportedGames.CHAMPD_UP) {
+			if (!sentChampdUpName) {
+				JOptionPane.showMessageDialog(window, "You must submit a name first!\nUse the text box and \"Submit\" button under the color picker first!", "Enter Challenger Name", JOptionPane.ERROR_MESSAGE);
+				return;
+			}
+		}
+		
+		sentChampdUpName = false;
 		currentGame.export(JackboxDrawer.this);
 	}
 	
@@ -867,6 +878,8 @@ public class JackboxDrawer {
 					}
 					out = out.trim().replaceAll("['\"]", "\\$0");
 					getWebsocketServer().broadcast("SUBMITNAME;data.val = '" + out + "'");
+					
+					sentChampdUpName = true;
 				}
 			}
 		});
