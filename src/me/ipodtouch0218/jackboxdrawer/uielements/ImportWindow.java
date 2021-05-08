@@ -258,7 +258,7 @@ public class ImportWindow extends JDialog {
 		lblEstimatedLines.setText("Number of Lines: " + lines);
 		
 		if (JackboxDrawer.INSTANCE.getCurrentGame() == SupportedGames.TEE_KO) {
-			if (lines < 1500) {
+			if (lines < 1000) {
 				lblLag.setText("Shouldn't be laggy, even with multiple users.");
 				lblLag.setForeground(new Color(51, 204, 51));
 			} else {

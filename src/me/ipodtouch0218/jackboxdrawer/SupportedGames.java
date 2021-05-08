@@ -32,8 +32,13 @@ public enum SupportedGames {
 		return false;
 	}),
 	DRAWFUL_2("Drawful 2", ImageType.VECTOR, 240, 300, (jbd) -> {
+		ArrayList<PushTheButtonLine> list = new ArrayList<>();
+		for (JackboxLine lines : jbd.getLines()) {
+			list.add(new PushTheButtonLine(lines));
+		}
+		
 		try {
-			jbd.getWebsocketServer().broadcast("var test = " + new ObjectMapper().writeValueAsString(jbd.getLines()) +"; if (typeof (data.body.pictureLines) !== 'undefined') { data.body.pictureLines = test; } else { data.body.drawingLines = test; }");
+			jbd.getWebsocketServer().broadcast("data.body.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -44,7 +49,7 @@ public enum SupportedGames {
 		try {
 			ByteArrayOutputStream stream = new ByteArrayOutputStream();
 			ImageIO.write(VolatileImageHelper.toBufferedImage(jbd.getCanvasImage()), "PNG", stream);
-			jbd.getWebsocketServer().broadcast("data.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
+			jbd.getWebsocketServer().broadcast("data.body.drawing = '" + Base64.getEncoder().encodeToString(stream.toByteArray()) + "';");
 			return true;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -66,9 +71,10 @@ public enum SupportedGames {
 		for (JackboxLine lines : jbd.getLines()) {
 			list.add(new PushTheButtonLine(lines));
 		}
+		list.forEach(ptbl -> ptbl.setThickness(Math.max(1,ptbl.getThickness()+2)));
 		
 		try {
-			jbd.getWebsocketServer().broadcast("data.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
+			jbd.getWebsocketServer().broadcast("data.body.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
 			return true;
 		} catch (JsonProcessingException e) {
 			e.printStackTrace();
@@ -86,6 +92,22 @@ public enum SupportedGames {
 		}
 		return false;
 	}),
+	/*
+	PATENTLYSTUPID("Patently Stupid", ImageType.VECTOR, 480, 480, (jbd) -> {
+		ArrayList<PushTheButtonLine> list = new ArrayList<>();
+		for (JackboxLine lines : jbd.getLines()) {
+			list.add(new PushTheButtonLine(lines));
+		}
+		
+		try {
+			jbd.getWebsocketServer().broadcast("data.body.lines = " + new ObjectMapper().writeValueAsString(list.toArray(new PushTheButtonLine[]{})));
+			return true;
+		} catch (JsonProcessingException e) {
+			e.printStackTrace();
+		}
+		return false;
+	}),
+	*/
 	CHAMPD_UP("Champ'd Up", ImageType.VECTOR, 640, 640, (jbd) -> {
 		ArrayList<PushTheButtonLine> list = new ArrayList<>();
 		for (JackboxLine lines : jbd.getLines()) {

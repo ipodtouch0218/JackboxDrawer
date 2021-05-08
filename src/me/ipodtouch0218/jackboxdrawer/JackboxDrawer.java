@@ -87,7 +87,7 @@ public class JackboxDrawer {
 	public static JackboxDrawer INSTANCE;
 	
 	//--Constants--//
-	public static final String VERSION = "1.4.3";
+	public static final String VERSION = "1.5.0";
 	private static final String PROGRAM_NAME = "Jackbox Drawer v" + VERSION;
 	private static final Color[] TEEKO_BG_COLORS = {new Color(40, 85, 135), new Color(95, 98, 103), new Color(8, 8, 8), new Color(117, 14, 30), new Color(98, 92, 74)};
 	private static final BufferedImage TRANSPARENT_TEXTURE = new BufferedImage(2,2,BufferedImage.TYPE_BYTE_GRAY);
@@ -106,7 +106,7 @@ public class JackboxDrawer {
 	//--Variables--//
 	
 	@Getter private WebsocketServer websocketServer;
-	@Getter private SupportedGames currentGame = SupportedGames.DRAWFUL_2;
+	@Getter private SupportedGames currentGame = SupportedGames.DRAWFUL_1;
 	
 	//Undo and Redo History
 	private SizeLimitedList<ArrayList<JackboxLine>> undoRedoHistory = new SizeLimitedList<>(100);
@@ -244,13 +244,8 @@ public class JackboxDrawer {
 	 * @return If the canvas was cleared & resized.
 	 */
 	public boolean clearCanvas(int newWidth, int newHeight) {
-		if (getCanvasWidth() == newWidth && getCanvasHeight() == newHeight) {
-			//Same height + width, don't clear.
-			return true;
-		}
-		//Different height+width
 		if ((lines.isEmpty() && importedImage == null) ||
-			JOptionPane.showConfirmDialog(window, "The game you are changing to has a differnet canvas size.\nThe canvas must be cleared to continue.\nThis action is irreversable.\nClear the entire canvas?", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+			JOptionPane.showConfirmDialog(window, "You are changing to a different game.\nThe canvas must be cleared to continue.\nThis action is irreversable.\nClear the entire canvas?", "Clear Canvas", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
 			
 			lines.clear();
 			clearHistory();
@@ -326,16 +321,14 @@ public class JackboxDrawer {
 			return;
 		}
 		
-		if (currentGame.getCanvasWidth() != newGame.getCanvasWidth() || currentGame.getCanvasHeight() != newGame.getCanvasHeight()) {
-			if (!clearCanvas(newGame.getCanvasWidth(), newGame.getCanvasHeight())) {
-				gameSelectionButtons.get(currentGame).setSelected(true);
-				return;
-			} else {
-				currentGame = newGame;
-				canvasImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.TRANSLUCENT);
-				drawnToScreenImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.OPAQUE);
-				sketchpad.setIcon(new StretchIcon(drawnToScreenImage, true));
-			}
+		if (!clearCanvas(newGame.getCanvasWidth(), newGame.getCanvasHeight())) {
+			gameSelectionButtons.get(currentGame).setSelected(true);
+			return;
+		} else {
+			currentGame = newGame;
+			canvasImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.TRANSLUCENT);
+			drawnToScreenImage = VolatileImageHelper.createVolatileImage(getCanvasWidth(), getCanvasHeight(), VolatileImage.OPAQUE);
+			sketchpad.setIcon(new StretchIcon(drawnToScreenImage, true));
 		}
 		currentGame = newGame;
 		teekoPanel.setVisible(newGame == SupportedGames.TEE_KO);
@@ -680,7 +673,7 @@ public class JackboxDrawer {
 		gameButtons.add(rdbtnmntmDrawful_1);
 		menuGame.add(rdbtnmntmDrawful_1);
 		
-		JRadioButtonMenuItem rdbtnmntmDrawful_2 = new JRadioButtonMenuItem("Drawful 2");
+		JRadioButtonMenuItem rdbtnmntmDrawful_2 = new JRadioButtonMenuItem("Drawful 2 [PATCHED]");
 		rdbtnmntmDrawful_2.setSelected(true);
 		gameSelectionButtons.put(SupportedGames.DRAWFUL_2, rdbtnmntmDrawful_2);
 		rdbtnmntmDrawful_2.addActionListener(gameRadioButtonListener);
@@ -710,6 +703,14 @@ public class JackboxDrawer {
 		rdbtnmntmPushTheButton.addActionListener(gameRadioButtonListener);
 		menuGame.add(rdbtnmntmPushTheButton);
 		gameButtons.add(rdbtnmntmPushTheButton);
+		
+		/*
+		JRadioButtonMenuItem rdbtnmntmPatentlyStupid = new JRadioButtonMenuItem("Patently Stupid");
+		gameSelectionButtons.put(SupportedGames.PATENTLYSTUPID, rdbtnmntmPatentlyStupid);
+		rdbtnmntmPatentlyStupid.addActionListener(gameRadioButtonListener);
+		menuGame.add(rdbtnmntmPatentlyStupid);
+		gameButtons.add(rdbtnmntmPatentlyStupid);
+		*/
 		
 		JRadioButtonMenuItem rdbtnmntmChampdUp = new JRadioButtonMenuItem("Champ'd Up");
 		gameSelectionButtons.put(SupportedGames.CHAMPD_UP, rdbtnmntmChampdUp);

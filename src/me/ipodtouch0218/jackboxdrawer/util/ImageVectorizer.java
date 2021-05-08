@@ -118,7 +118,7 @@ public class ImageVectorizer {
 					continue;
 				} else {
 					//group the points, if its champd up we need points on every pixel.. ugh.
-					if (JackboxDrawer.INSTANCE.getCurrentGame() == SupportedGames.CHAMPD_UP) {
+					if (JackboxDrawer.INSTANCE.getCurrentGame() == SupportedGames.CHAMPD_UP || JackboxDrawer.INSTANCE.getCurrentGame() == SupportedGames.PUSH_THE_BUTTON) {
 						currentLine.points.add(thisPoint);
 					}
 				}

@@ -2,7 +2,7 @@
 // @name         JackboxDrawer
 // @description  Allows custom brush sizes, colors, and even importing images into Jackbox's drawing games!
 // @namespace    ipodtouch0218/JackboxDrawer
-// @version      1.4.3
+// @version      1.5.0
 // @include      *://jackbox.tv/*
 // ==/UserScript==
 
@@ -46,13 +46,13 @@ var games = {
   },
   "drawful_2": {
     submitDrawing: function() {
-      document.getElementById("drawful-submitdrawing").click()
+      document.getElementById("submitdrawing").click()
     },
     isInDrawingMode: function() {
-      return !document.getElementsByClassName("state-draw")[0].getAttribute("class").includes("pt-page-off")
+      return document.getElementsByClassName("Draw")[0] != null
     },
     getSketchpad: function() {
-      return document.getElementsByClassName("sketchpad")[0]
+      return document.getElementById("fullLayer")
     }
   },
   "bidiots": {
@@ -99,6 +99,17 @@ var games = {
       return document.getElementById("sketchpad")
     }
   },
+  "patentlystupid": {
+	submitDrawing: function() {
+	  document.getElementById("submitdrawing").click()
+	},
+	isInDrawingMode: function() {
+	  return document.getElementsByClassName("Draw")[0] != null
+	},
+	getSketchpad: function() {
+	  return document.getElementById("fullLayer")
+	}
+  },
   "champd_up": {
     submitDrawing: function() {
       if (document.getElementsByClassName("button choice-button btn btn-lg")[0].innerText == "SUBMIT") {
@@ -137,26 +148,24 @@ function updateGame(id) {
 
 //Is ran every time the document changes. Useful for finding which game we're currently playing.
 var callback = function(mutationsList, observer) {
-  if (document.getElementById("page-drawful") !== null) {
-    //Drawful 1 and 2 actually share the same ID, but have different graphcis modes.
-    //Luckily, the drawing div has "drawful2-page" as a class in Drawful 2.
-    if (document.getElementsByClassName("state-draw")[0].getAttribute("class").includes("drawful2-page")) {
-      updateGame("drawful_2")
-    } else {
-      updateGame("drawful_1")
-    }
+  if (document.getElementById("page-drawful") != null) {
+	updateGame("drawful_1")
+  } else if (document.getElementsByClassName("drawful2international")[0] != null) {
+	updateGame("drawful_2")
   } else if (document.getElementById("page-auction") !== null) {
     updateGame("bidiots")
   } else if (document.getElementById("page-awshirt") !== null) {
     //Fun fact. Tee KO is actually internally called "awshirt" both on the website and in the game files.
     updateGame("tee_ko")
-  } else if (document.getElementsByClassName("Push The Button")[0] != null) {
+  } else if (document.getElementsByClassName("pushthebutton")[0] != null) {
     //Yes, the class name has spaces.
     updateGame("push_the_button")
   } else if (document.getElementById("page-triviadeath") !== null) {
     updateGame("trivia_murder_party_1")
   } else if (document.getElementsByClassName("worldchamps")[0] != null) {
     updateGame("champd_up")
+  } else if (document.getElementsByClassName("patentlystupid")[0] != null) {
+	updateGame("patentlystupid")
   }
 }
 
@@ -186,13 +195,13 @@ setInterval(function() {
   }
   
   socket.onmessage = function(event) {
-    
+	
     //Check for the proper version.
     if (event.data.startsWith("version")) {
         var version = event.data.split(":")[1]
-        if (version > 142) {
-            alert("Please update the JackboxDrawer Greasemonkey script!")
-        } else if (version < 142) {
+        if (version > 150) {
+            alert("Please update the JackboxDrawer Greasemonkey script!\nThe download can be found here: https://greasyfork.org/en/scripts/406893-jackboxdrawer")
+        } else if (version < 150) {
             alert("Please update the JackboxDrawer Java program!\nThe download can be found here: https://github.com/ipodtouch0218/JackboxDrawer/releases")
         }
         return
@@ -232,7 +241,9 @@ setInterval(function() {
     }
     
     submit = true
-    if (gameID == "champd_up") {
+	if (gameID == "patentlystupid") {
+		window.eval("ignore = 1")
+	} else if (gameID == "champd_up") {
       if (currentGame.canSubmitNormally()) {
         window.eval("ignore = 1")
       } else {
