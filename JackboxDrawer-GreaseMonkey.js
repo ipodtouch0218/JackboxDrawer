@@ -148,6 +148,7 @@ function updateGame(id) {
 
 //Is ran every time the document changes. Useful for finding which game we're currently playing.
 var callback = function(mutationsList, observer) {
+    console.log('test')
   if (document.getElementById("page-drawful") != null) {
 	updateGame("drawful_1")
   } else if (document.getElementsByClassName("drawful2international")[0] != null) {
@@ -167,13 +168,19 @@ var callback = function(mutationsList, observer) {
   } else if (document.getElementsByClassName("patentlystupid")[0] != null) {
 	updateGame("patentlystupid")
   }
+   // observer.observe(targetNode, config)
 }
 
 //Initiate the DOM observer to run "callback" every time it changes.
 var observer = new MutationObserver(callback)
 var targetNode = document.getElementById('app')
-var config = { attributes: false, childList: true, subtree: true }
+var config = { attributes: true, childList: true, subtree: true }
 observer.observe(targetNode, config)
+
+//chrome broke mutation observers in the latest update??? sure... temporary patch, i guess.
+targetNode.addEventListener("DOMSubtreeModified", function (event) {
+  callback(null, null);
+}, false);
 
 //Info related to communicating with the Java app.
 var socket = null
