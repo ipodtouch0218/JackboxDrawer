@@ -2,7 +2,7 @@
 // @name         JackboxDrawer
 // @description  Allows custom brush sizes, colors, and even importing images into Jackbox's drawing games!
 // @namespace    ipodtouch0218/JackboxDrawer
-// @version      1.6.0
+// @version      1.6.1
 // @include      *://jackbox.tv/*
 // ==/UserScript==
 
@@ -148,7 +148,6 @@ function updateGame(id) {
 
 //Is ran every time the document changes. Useful for finding which game we're currently playing.
 var callback = function(mutationsList, observer) {
-    console.log('test')
   if (document.getElementById("page-drawful") != null) {
 	updateGame("drawful_1")
   } else if (document.getElementsByClassName("drawful2international")[0] != null) {
@@ -168,19 +167,16 @@ var callback = function(mutationsList, observer) {
   } else if (document.getElementsByClassName("patentlystupid")[0] != null) {
 	updateGame("patentlystupid")
   }
-   // observer.observe(targetNode, config)
 }
 
-//Initiate the DOM observer to run "callback" every time it changes.
-var observer = new MutationObserver(callback)
-var targetNode = document.getElementById('app')
-var config = { attributes: true, childList: true, subtree: true }
-observer.observe(targetNode, config)
-
-//chrome broke mutation observers in the latest update??? sure... temporary patch, i guess.
-targetNode.addEventListener("DOMSubtreeModified", function (event) {
-  callback(null, null);
-}, false);
+//chrome doesn't like the observer being setup now, lets just add it later???
+setTimeout(function() {
+  //Initiate the DOM observer to run "callback" every time it changes.
+  var observer = new MutationObserver(callback)
+  var targetNode = document.getElementById('app')
+  var config = { attributes: true, childList: true, subtree: true }
+  observer.observe(targetNode, config)
+}, 1000)
 
 //Info related to communicating with the Java app.
 var socket = null
@@ -206,9 +202,9 @@ setInterval(function() {
     //Check for the proper version.
     if (event.data.startsWith("version")) {
         var version = event.data.split(":")[1]
-        if (version > 160) {
+        if (version > 161) {
             alert("Please update the JackboxDrawer Greasemonkey script!\nThe download can be found here: https://greasyfork.org/en/scripts/406893-jackboxdrawer")
-        } else if (version < 160) {
+        } else if (version < 161) {
             alert("Please update the JackboxDrawer Java program!\nThe download can be found here: https://github.com/ipodtouch0218/JackboxDrawer/releases")
         }
         return
@@ -254,6 +250,7 @@ setInterval(function() {
       if (currentGame.canSubmitNormally()) {
         window.eval("ignore = 1")
       } else {
+		alert("You must submit a name first!\nUse the text box and \"Submit\" button under the color picker first!");
         submit = false
       }
     }
